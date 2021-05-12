@@ -6,10 +6,16 @@
 #define TIN_TORRENTLIKEP2P_DOWNLOADWORKER_H
 
 
+#include "../../../Thread.h"
+
 class DownloadWorker {
 
 public:
-	static void run(void* threadInfo);
+	void *run(void *threadInfo);
+
+	static void *start(void*threadInfo){
+		return ((DownloadWorker*)(static_cast<thread_info*>(threadInfo)->context))->run(threadInfo);
+	}
 };
 
 

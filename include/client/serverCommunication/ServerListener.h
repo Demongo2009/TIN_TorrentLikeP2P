@@ -6,10 +6,16 @@
 #define TIN_TORRENTLIKEP2P_SERVERLISTENER_H
 
 
+#include "../../Thread.h"
+
 class ServerListener {
 
 public:
-	static void run(void* threadInfo);
+	void *run(void *threadInfo);
+
+	static void *start(void*threadInfo){
+		return ((ServerListener*)(static_cast<thread_info*>(threadInfo)->context))->run(threadInfo);
+	}
 };
 
 

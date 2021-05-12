@@ -4,7 +4,7 @@
 
 #include "../../../include/client/CLI/CLI.h"
 
-void CLI::run(void *threadInfo) {
+void *CLI::run(void *threadInfo) {
 
 	// handle terminal
 

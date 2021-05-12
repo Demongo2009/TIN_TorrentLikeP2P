@@ -6,10 +6,16 @@
 #define TIN_TORRENTLIKEP2P_INTEGRITYWORKER_H
 
 
+#include "../../../Thread.h"
+
 class IntegrityWorker {
 
 public:
-	static void run(void * );
+	void *run(void *threadInfo);
+
+	static void *start(void*threadInfo){
+		return ((IntegrityWorker*)(static_cast<thread_info*>(threadInfo)->context))->run(threadInfo);
+	}
 };
 
 

@@ -4,7 +4,7 @@
 
 #include "../../../../include/server/workerThreads/uploadWorker/UploadWorker.h"
 
-void UploadWorker::run(void *threadInfo) {
+void *UploadWorker::run(void *threadInfo) {
 
 	// upload
 

@@ -4,7 +4,7 @@
 
 #include "../../../include/client/serverCommunication/ServerListener.h"
 
-void ServerListener::run(void *threadInfo) {
+void *ServerListener::run(void *threadInfo) {
 
 	// listten to server messages
 

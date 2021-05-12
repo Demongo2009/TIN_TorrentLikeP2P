@@ -5,9 +5,9 @@
 #include <cstdlib>
 #include <stdexcept>
 #include "../../include/server/Server.h"
-#include "../../include/Thread.h"
 
-void Server::runServer(void *threadInfo) {
+
+void* Server::run(void *threadInfo) {
 
 	int status;
 	void* res;
@@ -18,36 +18,39 @@ void Server::runServer(void *threadInfo) {
 
 	struct thread_info** threads;
 	// listening to other nodes response
-	struct thread_info* nodeMessageListener = createNodeMessageListener();
+	NodeMessageListener* nodeMessageListener = new NodeMessageListener();
+	thread_info* nodeMessageListenerThread = createNodeMessageListener(nodeMessageListener);
     // listening to client messages
-	struct thread_info* clientMessageListener = createClientMessageListener();
+    ClientMessageListener* clientMessageListener = new ClientMessageListener();
+    thread_info* clientMessageListenerThread = createClientMessageListener(clientMessageListener);
 
 	// maybe not needed, just create worker thread when client message receved
 	// on the other hand may be useful for download
 	//struct thread_info* SupervisorWorker = createSupervisorWorker();
 
 	// for directory check and local resources integrity
-	struct thread_info* integrityWorker = createIntegrityWorker();
+	IntegrityWorker* integrityWorker = new IntegrityWorker();
+	thread_info* integrityWorkerThread = createIntegrityWorker(integrityWorker);
 
 
 	// can be done in loop with threads array
-	status = pthread_join(nodeMessageListener->thread_id, &res);
+	status = pthread_join(nodeMessageListenerThread->thread_id, &res);
 	if(status != 0){
 		throw std::runtime_error("pthread_join");
 	}
-	free(nodeMessageListener);
+	free(nodeMessageListenerThread);
 
-	status = pthread_join(clientMessageListener->thread_id, &res);
+	status = pthread_join(clientMessageListenerThread->thread_id, &res);
 	if(status != 0){
 		throw std::runtime_error("pthread_join");
 	}
-	free(clientMessageListener);
+	free(clientMessageListenerThread);
 
-	status = pthread_join(integrityWorker->thread_id, &res);
+	status = pthread_join(integrityWorkerThread->thread_id, &res);
 	if(status != 0){
 		throw std::runtime_error("pthread_join");
 	}
-	free(integrityWorker);
+	free(integrityWorkerThread);
 
 	free(res);
 }
@@ -65,16 +68,101 @@ void Server::broadcastAddNode() {
 	//send serverAddr and port
 }
 
-struct thread_info* Server::createNodeMessageListener() {
-	return nullptr;
+thread_info* Server::createNodeMessageListener(NodeMessageListener* nodeMessageListener) {
+	pthread_attr_t attr;
+	int status;
+
+	status = pthread_attr_init(&attr);
+	if(status != 0){
+		throw std::runtime_error("pthread_attr_init!");
+	}
+
+	thread_info *tinfo = static_cast<thread_info *>(calloc(1, sizeof(*tinfo)));
+	if (tinfo == NULL)
+		throw std::runtime_error("calloc");
+
+	tinfo->thread_num = 3;
+	tinfo->context = nodeMessageListener;
+	tinfo->parentObj = this;
+//	tinfo->string = workDir;
+
+	status = pthread_create(&tinfo->thread_id, &attr,
+							reinterpret_cast<void *(*)(void *)>(&NodeMessageListener::start), &tinfo);
+	if (status != 0)
+		throw std::runtime_error("pthread_create");
+
+	status = pthread_attr_destroy(&attr);
+	if (status != 0)
+		throw std::runtime_error("pthread_attr_destroy");
+
+
+	return tinfo;
 }
 
-thread_info *Server::createClientMessageListener() {
-	return nullptr;
+thread_info *Server::createClientMessageListener(ClientMessageListener* clientMessageListener) {
+	pthread_attr_t attr;
+	int status;
+
+	status = pthread_attr_init(&attr);
+	if(status != 0){
+		throw std::runtime_error("pthread_attr_init!");
+	}
+
+	thread_info *tinfo = static_cast<thread_info *>(calloc(1, sizeof(*tinfo)));
+	if (tinfo == NULL)
+		throw std::runtime_error("calloc");
+
+	tinfo->thread_num =4;
+	tinfo->context = clientMessageListener;
+	tinfo->parentObj = this;
+//	tinfo->string = workDir;
+
+	status = pthread_create(&tinfo->thread_id, &attr,
+							reinterpret_cast<void *(*)(void *)>(&ClientMessageListener::start), &tinfo);
+	if (status != 0)
+		throw std::runtime_error("pthread_create");
+
+	status = pthread_attr_destroy(&attr);
+	if (status != 0)
+		throw std::runtime_error("pthread_attr_destroy");
+
+
+	return tinfo;
 }
 
-thread_info *Server::createIntegrityWorker() {
-	return nullptr;
+thread_info *Server::createIntegrityWorker(IntegrityWorker* integrityWorker) {
+	pthread_attr_t attr;
+	int status;
+
+	status = pthread_attr_init(&attr);
+	if(status != 0){
+		throw std::runtime_error("pthread_attr_init!");
+	}
+
+	thread_info *tinfo = static_cast<thread_info *>(calloc(1, sizeof(*tinfo)));
+	if (tinfo == NULL)
+		throw std::runtime_error("calloc");
+
+	tinfo->thread_num = 5;
+	tinfo->context = integrityWorker;
+	tinfo->parentObj = this;
+//	tinfo->string = workDir;
+
+	status = pthread_create(&tinfo->thread_id, &attr,
+							reinterpret_cast<void *(*)(void *)>(&IntegrityWorker::start), &tinfo);
+	if (status != 0)
+		throw std::runtime_error("pthread_create");
+
+	status = pthread_attr_destroy(&attr);
+	if (status != 0)
+		throw std::runtime_error("pthread_attr_destroy");
+
+
+	return tinfo;
+}
+
+bool Server::addNewLocalResource(std::string name) {
+	return false;
 }
 
 

@@ -4,8 +4,9 @@
 
 #include "../../../../include/server/workerThreads/downloadWorker/DownloadWorker.h"
 
-void DownloadWorker::run(void *threadInfo) {
+void *DownloadWorker::run(void *threadInfo) {
 
 	// download
 
+	// broadcast after download?
 }

@@ -4,7 +4,7 @@
 
 #include "../../../../include/server/workerThreads/integrityWorker/IntegrityWorker.h"
 
-void IntegrityWorker::run(void *) {
+void *IntegrityWorker::run(void *) {
 
 	// check work dir integrity
 

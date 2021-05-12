@@ -6,11 +6,17 @@
 #define TIN_TORRENTLIKEP2P_UPLOADWORKER_H
 
 
+#include "../../../Thread.h"
+
 class UploadWorker {
 
 
 public:
-	static void run(void *threadInfo);
+	void *run(void *threadInfo);
+
+	static void *start(void*threadInfo){
+		return ((UploadWorker*)(static_cast<thread_info*>(threadInfo)->context))->run(threadInfo);
+	}
 };
 
 

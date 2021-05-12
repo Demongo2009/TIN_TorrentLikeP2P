@@ -11,6 +11,10 @@
 #include <openssl/md5.h>
 #include <cstring>
 #include <netinet/in.h>
+#include "nodesCommunication/NodeMessageListener.h"
+#include "clientCommunication/ClientMessageListener.h"
+#include "workerThreads/integrityWorker/IntegrityWorker.h"
+#include "../Thread.h"
 
 class FileMetadata{
 	std::string name;
@@ -145,29 +149,37 @@ class Server {
 	};
 
 
-	static LocalResources localResources;
+	LocalResources localResources;
 	struct in_addr  serverAddress;
 	int serverPort;
 
-	static void initializeLocalResources(const std::string& workDir);
+	void initializeLocalResources(const std::string& workDir);
 
-	static void broadcastAddNode();
+	void broadcastAddNode();
 
-	static struct thread_info* createNodeMessageListener();
+	thread_info* createNodeMessageListener(NodeMessageListener* nodeMessageListener);
 
-	static thread_info *createClientMessageListener();
+	thread_info *createClientMessageListener(ClientMessageListener* clientMessageListener);
 
-	static thread_info *createIntegrityWorker();
-
-
+	thread_info *createIntegrityWorker(IntegrityWorker* integrityWorker);
 
 
 public:
 	Server(){}
 
-	static void runServer(void *threadInfo);
+	static void *start(void *threadInfo){
+		return ((Server*)(static_cast<thread_info*>(threadInfo)->context))->run(threadInfo);
+	}
 
+	void *run(void *threadInfo);
 
+	FileMetadata* addNewLocalResource(std::string name);
+
+	std::vector<std::string> getNetworkFiles(){
+		return localResources.getNetworkFiles();
+	}
+
+	bool revokeFile(std::string name);
 };
 
 
