@@ -11,6 +11,8 @@
 class DownloadWorker {
 
 public:
+	DownloadWorker() {}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

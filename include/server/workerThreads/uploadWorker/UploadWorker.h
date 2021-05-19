@@ -12,6 +12,8 @@ class UploadWorker {
 
 
 public:
+	UploadWorker(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

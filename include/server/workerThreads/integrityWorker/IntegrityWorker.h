@@ -11,6 +11,8 @@
 class IntegrityWorker {
 
 public:
+	IntegrityWorker(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

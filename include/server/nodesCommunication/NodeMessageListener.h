@@ -13,6 +13,8 @@
 class NodeMessageListener {
 
 public:
+	NodeMessageListener(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

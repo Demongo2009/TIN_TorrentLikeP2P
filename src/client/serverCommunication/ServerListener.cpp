@@ -7,5 +7,6 @@
 void *ServerListener::run(void *threadInfo) {
 
 	// listten to server messages
-
+	pthread_yield();
+	return nullptr;
 }

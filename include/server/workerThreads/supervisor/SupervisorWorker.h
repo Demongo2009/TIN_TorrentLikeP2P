@@ -14,6 +14,8 @@ class SupervisorWorker {
 	// may be unnecessary
 
 public:
+	SupervisorWorker(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

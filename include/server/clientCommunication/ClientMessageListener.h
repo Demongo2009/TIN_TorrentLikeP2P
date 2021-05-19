@@ -11,9 +11,12 @@
 #include "../workerThreads/downloadWorker/DownloadWorker.h"
 
 
+
 class ClientMessageListener {
 
 public:
+	ClientMessageListener(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){
@@ -22,7 +25,7 @@ public:
 
 	thread_info *createDownloadWorker(DownloadWorker *pWorker);
 
-	void broadcastNewResource(FileMetadata *pMetadata);
+	void broadcastNewResource(void *pMetadata);
 
 	void sendMessageToClient(std::vector<std::string> vector);
 };

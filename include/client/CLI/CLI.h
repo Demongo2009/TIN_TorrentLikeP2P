@@ -12,6 +12,8 @@ class CLI {
 
 
 public:
+	CLI(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

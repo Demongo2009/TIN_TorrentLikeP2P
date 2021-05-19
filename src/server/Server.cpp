@@ -161,8 +161,8 @@ thread_info *Server::createIntegrityWorker(IntegrityWorker* integrityWorker) {
 	return tinfo;
 }
 
-bool Server::addNewLocalResource(std::string name) {
-	return false;
+FileMetadata* Server::addNewLocalResource(std::string name) {
+	return nullptr;
 }
 
 

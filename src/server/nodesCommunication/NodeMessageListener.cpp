@@ -15,6 +15,8 @@ void *NodeMessageListener::run(void *threadInfo) {
 
 	struct thread_info** threads;
 
+	pthread_yield();
+	return nullptr;
 
 	// node message handler / whole UDP(broadcast) site of protocol handler needed
 	// TCP site of protocol handled in supervisor or download/upload workers

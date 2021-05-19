@@ -9,4 +9,7 @@ void *DownloadWorker::run(void *threadInfo) {
 	// download
 
 	// broadcast after download?
+
+	pthread_yield();
+	return nullptr;
 }

@@ -15,6 +15,8 @@ void *ClientMessageListener::run(void *threadInfo) {
 
 	struct thread_info** threads;
 
+	pthread_yield();
+	return nullptr;
 
 	// client message handler
 

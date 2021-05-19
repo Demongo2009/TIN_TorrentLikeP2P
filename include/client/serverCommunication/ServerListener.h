@@ -11,6 +11,8 @@
 class ServerListener {
 
 public:
+	ServerListener(){}
+
 	void *run(void *threadInfo);
 
 	static void *start(void*threadInfo){

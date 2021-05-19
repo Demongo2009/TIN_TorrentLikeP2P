@@ -7,5 +7,6 @@
 void *UploadWorker::run(void *threadInfo) {
 
 	// upload
-
+	pthread_yield();
+	return nullptr;
 }

@@ -7,5 +7,6 @@
 void *IntegrityWorker::run(void *) {
 
 	// check work dir integrity
-
+	pthread_yield();
+	return nullptr;
 }

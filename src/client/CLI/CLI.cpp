@@ -7,5 +7,6 @@
 void *CLI::run(void *threadInfo) {
 
 	// handle terminal
-
+	pthread_yield();
+	return nullptr;
 }
