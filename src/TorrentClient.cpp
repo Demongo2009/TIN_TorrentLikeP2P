@@ -1,7 +1,3 @@
-//
-// Created by konrad on 5/27/21.
-//
-
 #include <thread>
 
 #include "../include/TorrentClient.h"

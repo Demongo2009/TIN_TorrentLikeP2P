@@ -1,7 +1,3 @@
-//
-// Created by konrad on 5/27/21.
-//
-
 #ifndef TIN_TORRENTLIKEP2P_PEERINFO_H
 #define TIN_TORRENTLIKEP2P_PEERINFO_H
 
