@@ -5,15 +5,22 @@
 #ifndef TIN_TORRENTLIKEP2P_TORRENTCLIENT_H
 #define TIN_TORRENTLIKEP2P_TORRENTCLIENT_H
 
-
-#include <iostream>
+#include <vector>
+#include <mutex>
+#include <map>
+#include "ResourceInfo.h"
+#include "PeerInfo.h"
 
 class TorrentClient {
 private:
-    // TODO:
-    //  struktury, które będą współdzielone pomiędzy wątkami głównymi
-    //  mutexy ktore synchronizuja dostep do tych sturktur
+    // w sprawku napisalsimy ze bedzie mapa<nazwazasobu - metadane> i mozemy tak zrobić, na razie zostawiam tak
+    std::vector<ResourceInfo> localResources; //mozliwe ze bedize trzeba inna strukture zamiast generyczną
+    std::vector<ResourceInfo> networkResources;
+    std::vector<PeerInfo> nodes;
 
+    std::mutex localResourcesMutex;
+    std::mutex networkResourcesMutex;
+    std::mutex nodesMutex;
 
     void init();
     void* runServerThread();

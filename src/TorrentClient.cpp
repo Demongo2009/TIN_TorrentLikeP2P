@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "../include/TorrentClient.h"
+#include "../include/Message.h"
 
 void TorrentClient::run() {
     /**
