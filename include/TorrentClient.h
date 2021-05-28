@@ -39,6 +39,28 @@ private:
      * */
 public:
     void run();
+
+	void ServerRecv();
+
+	void addNewFile(char message[253]);
+
+	void BroadcastNewNode();
+
+	void BroadcastNewFile(std::string fileName, std::string hash, int fileSize);
+
+	void revokeFile(char message[253]);
+
+	void nodeDeletedFile(char message[253]);
+
+	void addNewNode(char message[253]);
+
+	void nodeHaveBeenLogout(char message[253]);
+
+	void BroadcastRevokeFile(std::string fileName);
+
+	void BroadcastFileDeleted(std::string fileName);
+
+	void BroadcastLogout(std::vector<std::string> fileList);
 };
 
 
