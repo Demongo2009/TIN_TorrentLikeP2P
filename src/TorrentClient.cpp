@@ -22,7 +22,7 @@ void TorrentClient::run() {
 
 void TorrentClient::init() {
  /**
-  * inicjalizacja struktur
+  * inicjalizacja wątków i struktur
   * */
 }
 
@@ -38,13 +38,12 @@ void *TorrentClient::runCliThread() {
     return nullptr;
 }
 
-///////////////////////// demongos edit
-
 #define SERVERPORT 5555
-#define HEADER_SIZE 3
-#define MAX_RECV_SIZE 256
-#define MAX_MESSAGE_SIZE 253
 #define SERVERADDR 1981001006
+
+#define HEADER_SIZE 3
+#define MAX_MESSAGE_SIZE HEADER_SIZE+MAX_SIZE_OF_PAYLOAD
+
 
 // sending convention HEADER , {';' , MESSAGE_ELEMENT};
 
@@ -56,13 +55,13 @@ void errno_abort(const char* header)
 
 void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
     struct sockaddr_in sendAddr, recvAddr;
-    int trueflag = 1;
+    int trueFlag = 1;
     int fd;
     if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
 
-    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &trueflag, sizeof trueflag) < 0) {
+    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");
     }
 
@@ -76,7 +75,7 @@ void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
 //	char sbuf[HEADER_SIZE+5] = {};
 //	snprintf(sbuf, sizeof(sbuf), "%d;%d:%d", NEW_NODE, SERVERADDR, SERVERPORT);
 
-    char sbuf[HEADER_SIZE + MAX_MESSAGE_SIZE] = {};
+    char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
 
     if (sendto(fd, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0) {
@@ -93,12 +92,12 @@ void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
 void TorrentClient::serverRecv(){
 	
 	struct sockaddr_in recv_addr;
-	int trueflag = 1;
+	int trueFlag = 1;
 	int fd;
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
-	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");
     }
 
@@ -111,7 +110,7 @@ void TorrentClient::serverRecv(){
         errno_abort("bind");
     }
 
-	char rbuf[MAX_RECV_SIZE] = {};
+	char rbuf[MAX_MESSAGE_SIZE] = {};
 	if (recv(fd, rbuf, sizeof(rbuf)-1, 0) < 0) {
         errno_abort("recv");
     }
@@ -122,30 +121,31 @@ void TorrentClient::serverRecv(){
 	close(fd);
 
 	char header[HEADER_SIZE] = {};
-	char message[MAX_MESSAGE_SIZE] = {};
+	char payload[MAX_SIZE_OF_PAYLOAD] = {};
 
 	snprintf(header, sizeof(header), "%s", rbuf);
-	snprintf(message, sizeof(message), "%s", rbuf+HEADER_SIZE+1);
+	snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
 
+	//TODO: w tym switchu w niektorych węzłach(albo i wszystkich)
+	// zamiast payloadu bedzie trzeba przekazywać dodatkowo informacje o jaki węzeł chodzi itp.
 	switch (atoi(header)) {
 		case NEW_RESOURCE_AVAILABLE:
-			handleNewResourceAvailable(message);
+			handleNewResourceAvailable(payload);
 			break;
 		case OWNER_REVOKED_RESOURCE:
-            handleOwnerRevokedResource(message);
+            handleOwnerRevokedResource(payload);
 			break;
 		case NODE_DELETED_RESOURCE:
-			handleNodeDeletedResource(message);
+			handleNodeDeletedResource(payload);
 			break;
 		case NEW_NODE_IN_NETWORK:
-			handleNewNodeInNetwork(message);
+			handleNewNodeInNetwork(payload);
 			break;
 	    case STATE_OF_NODE:
-	        handleStateOfNode(message);
-	        //TODO: to dostajemy od każdego jak wyślemy broadcast ze jestesmy nowi w sieci
+	        handleStateOfNode(payload);
 	        break;
 		case NODE_LEFT_NETWORK:
-			handleNodeLeftNetwork(message);
+			handleNodeLeftNetwork(payload);
 			break;
 	}
 }
@@ -154,31 +154,35 @@ void TorrentClient::broadcastNewNode(){
     genericBroadcast(NEW_NODE_IN_NETWORK, "");
 }
 
-void TorrentClient::broadcastNewFile(std::string fileName, std::string hash, int fileSize) {
-    char sbuf[HEADER_SIZE + MAX_MESSAGE_SIZE] = {};
-    snprintf(sbuf, sizeof(sbuf), "%d;%s;%s;%d", NEW_RESOURCE_AVAILABLE, fileName.c_str(), hash.c_str(), fileSize);
+void TorrentClient::broadcastNewFile(ResourceInfo resource) {
+    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+    snprintf(sbuf, sizeof(sbuf),
+             "%s;%s;%d",
+             resource.resourceName.c_str(),
+             resource.revokeHash.c_str(),
+             resource.sizeInBytes);
     genericBroadcast(NEW_RESOURCE_AVAILABLE, sbuf);
 }
 
-void TorrentClient::broadcastRevokeFile(std::string fileName){
-	char sbuf[HEADER_SIZE+MAX_MESSAGE_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d;%s", OWNER_REVOKED_RESOURCE, fileName.c_str());
+void TorrentClient::broadcastRevokeFile(ResourceInfo resource){
+	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+	snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
     genericBroadcast(OWNER_REVOKED_RESOURCE, sbuf);
 }
 
-void TorrentClient::broadcastFileDeleted(std::string fileName){
-	char sbuf[HEADER_SIZE+MAX_MESSAGE_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d;%s", NODE_DELETED_RESOURCE, fileName.c_str());
+void TorrentClient::broadcastFileDeleted(ResourceInfo resource){
+	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+	snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
     genericBroadcast(NODE_DELETED_RESOURCE, sbuf);
 }
 
-void TorrentClient::broadcastLogout(std::vector<std::string> fileList){
+void TorrentClient::broadcastLogout(std::vector<ResourceInfo> resources){
 	std::stringstream ss;
-	for(const auto& f: fileList){
-		ss << ";" << f;
+	for(const auto& resource: resources){
+		ss << ";" << resource.resourceName;
 	}
-	char sbuf[HEADER_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d%s", NODE_LEFT_NETWORK, ss.str().c_str());
+	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+	snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
     genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
 

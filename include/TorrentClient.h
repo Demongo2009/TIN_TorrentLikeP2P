@@ -29,10 +29,10 @@ private:
 //broadcast functions
     void genericBroadcast(UdpMessageCode code, char* payload);
     void broadcastNewNode();
-    void broadcastNewFile(std::string fileName, std::string hash, int fileSize);
-    void broadcastRevokeFile(std::string fileName);
-    void broadcastFileDeleted(std::string fileName);
-    void broadcastLogout(std::vector<std::string> fileList);
+    void broadcastNewFile(ResourceInfo resource);
+    void broadcastRevokeFile(ResourceInfo resource);
+    void broadcastFileDeleted(ResourceInfo resource);
+    void broadcastLogout(std::vector<ResourceInfo> resources);
 
 //functions handling broadcasted messages - UDP server
     void handleNewResourceAvailable(char *message);
@@ -44,7 +44,7 @@ private:
 public:
     void run();
 
-	void serverRecv();
+	void serverRecv();//ta funkcja to chyba w UdpServer będzie
 
 
 };

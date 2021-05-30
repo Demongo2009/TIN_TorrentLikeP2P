@@ -3,11 +3,11 @@
 
 #include <string>
 
-class ResourceInfo {
+struct ResourceInfo {
     std::string resourceName;
     unsigned int sizeInBytes;
     std::string revokeHash;
-    bool isRevoked; //nie wiem czy to potrzebne, bo jak bedzie revoke to rownie dobrze mozemy usunac tą strukturę
+    bool isRevoked;
 };
 
 

@@ -1,7 +1,7 @@
 #ifndef TIN_TORRENTLIKEP2P_MESSAGE_H
 #define TIN_TORRENTLIKEP2P_MESSAGE_H
 
-#define MAX_SIZE_OF_PAYLOAD 500
+#define MAX_SIZE_OF_PAYLOAD 512
 
 
 //      NAZWA=KOD                       CO PRZESYLAMY
@@ -32,11 +32,9 @@ enum UdpMessageCode {
  *      2.podczas wysylania/odbierania kazdego komunikatu trzeba bedzie sprwdzac
  *      kod a potem w zalenosci od niego odpowienio serializowac/deserialziowac.
 */
- struct TcpMessage {
-     //
-    TcpMessageCode code;
+ struct TcpMessagePayload {
     unsigned int sizeOfPayload;
-    char payload[MAX_SIZE_OF_PAYLOAD];//tam gdzie mamy tablice w wysylanych komunikatach to pewnie trzeba jeszcze dodac liczbe przesylanych elementow na początku
+    char payload[MAX_SIZE_OF_PAYLOAD - sizeof(unsigned int)];
 };
 
 
