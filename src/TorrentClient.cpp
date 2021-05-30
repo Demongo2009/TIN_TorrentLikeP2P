@@ -26,19 +26,15 @@ void TorrentClient::init() {
   * */
 }
 
-void *TorrentClient::runServerThread() {
-    /**
-     * na początku: rozglos ze jestes nowy
-     *
-     * while(true){
-     *  tutaj typowy schemat pracy serwera(z uxpow mozna przekopiowac), czyli:
-     *      1. nasłuchuj na połączenie/jakiś komunikat
-     *      2. zobacz jaki to komunikat
-     *      3. wywolaj odpowiednią funkcję w zależności od rodzaju komunikatu
-     *      4. wróc do nasłuchiwania
-     * }
-     * */
+void *TorrentClient::runUdpServerThread() {
+    return nullptr;
+}
 
+void *TorrentClient::runTcpServerThread() {
+    return nullptr;
+}
+
+void *TorrentClient::runCliThread() {
     return nullptr;
 }
 
@@ -52,42 +48,73 @@ void *TorrentClient::runServerThread() {
 
 // sending convention HEADER , {';' , MESSAGE_ELEMENT};
 
-typedef enum BroadcastMessageType{
-	ADD_NEW_FILE = 100,
-	REVOKE_FILE = 110,
-	NO_LONGER_HAVE_FILE = 111,
-	NEW_NODE = 120,
-	NODE_LOGOUT = 130
-}BroadcastMessageType;
-
 void errno_abort(const char* header)
 {
 	perror(header);
 	exit(EXIT_FAILURE);
 }
 
-void TorrentClient::ServerRecv(){
+void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
+    struct sockaddr_in sendAddr, recvAddr;
+    int trueflag = 1;
+    int fd;
+    if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        errno_abort("socket");
+    }
+
+    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &trueflag, sizeof trueflag) < 0) {
+        errno_abort("setsockopt");
+    }
+
+    memset(&sendAddr, 0, sizeof sendAddr);
+    sendAddr.sin_family = AF_INET;
+    sendAddr.sin_port = (in_port_t) htons(SERVERPORT);
+    // broadcasting address for unix (?)
+    inet_aton("127.255.255.255", &sendAddr.sin_addr);
+
+    // dont know if addr will be needed
+//	char sbuf[HEADER_SIZE+5] = {};
+//	snprintf(sbuf, sizeof(sbuf), "%d;%d:%d", NEW_NODE, SERVERADDR, SERVERPORT);
+
+    char sbuf[HEADER_SIZE + MAX_MESSAGE_SIZE] = {};
+    snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
+
+    if (sendto(fd, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0) {
+        errno_abort("send");
+    }
+
+#ifdef DEBUG
+    printf("send new node: %s\n", sbuf);
+#endif
+
+    close(fd);
+}
+
+void TorrentClient::serverRecv(){
 	
 	struct sockaddr_in recv_addr;
 	int trueflag = 1;
 	int fd;
-	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		errno_abort("socket");
-	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
-				   &trueflag, sizeof trueflag) < 0)
-		errno_abort("setsockopt");
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        errno_abort("socket");
+    }
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
+        errno_abort("setsockopt");
+    }
 
 	memset(&recv_addr, 0, sizeof recv_addr);
 	recv_addr.sin_family = AF_INET;
 	recv_addr.sin_port = (in_port_t) htons(SERVERPORT);
 	recv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	if (bind(fd, (struct sockaddr*) &recv_addr, sizeof recv_addr) < 0)
-		errno_abort("bind");
+	if (bind(fd, (struct sockaddr*) &recv_addr, sizeof recv_addr) < 0) {
+        errno_abort("bind");
+    }
 
 	char rbuf[MAX_RECV_SIZE] = {};
-	if (recv(fd, rbuf, sizeof(rbuf)-1, 0) < 0)
-		errno_abort("recv");
+	if (recv(fd, rbuf, sizeof(rbuf)-1, 0) < 0) {
+        errno_abort("recv");
+    }
 	
 #ifdef DEBUG
 	printf("recv: %s\n", rbuf);
@@ -101,223 +128,67 @@ void TorrentClient::ServerRecv(){
 	snprintf(message, sizeof(message), "%s", rbuf+HEADER_SIZE+1);
 
 	switch (atoi(header)) {
-		case ADD_NEW_FILE:
-			addNewFile(message);
+		case NEW_RESOURCE_AVAILABLE:
+			handleNewResourceAvailable(message);
 			break;
-		case REVOKE_FILE:
-			revokeFile(message);
+		case OWNER_REVOKED_RESOURCE:
+            handleOwnerRevokedResource(message);
 			break;
-		case NO_LONGER_HAVE_FILE:
-			nodeDeletedFile(message);
+		case NODE_DELETED_RESOURCE:
+			handleNodeDeletedResource(message);
 			break;
-		case NEW_NODE:
-			addNewNode(message);
+		case NEW_NODE_IN_NETWORK:
+			handleNewNodeInNetwork(message);
 			break;
-		case NODE_LOGOUT:
-			nodeHaveBeenLogout(message);
+	    case STATE_OF_NODE:
+	        handleStateOfNode(message);
+	        //TODO: to dostajemy od każdego jak wyślemy broadcast ze jestesmy nowi w sieci
+	        break;
+		case NODE_LEFT_NETWORK:
+			handleNodeLeftNetwork(message);
 			break;
 	}
 }
 
-void TorrentClient::BroadcastNewNode(){
-	struct sockaddr_in sendAddr, recvAddr;
-	int trueflag = 1;
-	int fd;
-	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		errno_abort("socket");
-
-	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
-				   &trueflag, sizeof trueflag) < 0)
-		errno_abort("setsockopt");
-
-	memset(&sendAddr, 0, sizeof sendAddr);
-	sendAddr.sin_family = AF_INET;
-	sendAddr.sin_port = (in_port_t) htons(SERVERPORT);
-	// broadcasting address for unix (?)
-	inet_aton("127.255.255.255", &sendAddr.sin_addr);
-
-	// dont know if addr will be needed
-//	char sbuf[HEADER_SIZE+5] = {};
-//	snprintf(sbuf, sizeof(sbuf), "%d;%d:%d", NEW_NODE, SERVERADDR, SERVERPORT);
-
-	char sbuf[HEADER_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d", NEW_NODE);
-
-	if (sendto(fd, sbuf, strlen(sbuf) + 1, 0,
-			   (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0)
-		errno_abort("send");
-
-#ifdef DEBUG
-	printf("send new node: %s\n", sbuf);
-#endif
-
-	close(fd);
+void TorrentClient::broadcastNewNode(){
+    genericBroadcast(NEW_NODE_IN_NETWORK, "");
 }
 
-void TorrentClient::BroadcastNewFile(std::string fileName, std::string hash, int fileSize){
-	struct sockaddr_in sendAddr, recvAddr;
-	int trueflag = 1;
-	int fd;
-	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		errno_abort("socket");
+void TorrentClient::broadcastNewFile(std::string fileName, std::string hash, int fileSize) {
+    char sbuf[HEADER_SIZE + MAX_MESSAGE_SIZE] = {};
+    snprintf(sbuf, sizeof(sbuf), "%d;%s;%s;%d", NEW_RESOURCE_AVAILABLE, fileName.c_str(), hash.c_str(), fileSize);
+    genericBroadcast(NEW_RESOURCE_AVAILABLE, sbuf);
+}
 
-	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
-				   &trueflag, sizeof trueflag) < 0)
-		errno_abort("setsockopt");
-
-	memset(&sendAddr, 0, sizeof sendAddr);
-	sendAddr.sin_family = AF_INET;
-	sendAddr.sin_port = (in_port_t) htons(SERVERPORT);
-	// broadcasting address for unix (?)
-	inet_aton("127.255.255.255", &sendAddr.sin_addr);
-
-
+void TorrentClient::broadcastRevokeFile(std::string fileName){
 	char sbuf[HEADER_SIZE+MAX_MESSAGE_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d;%s;%s;%d", ADD_NEW_FILE, fileName.c_str(), hash.c_str(), fileSize);
-	if (sendto(fd, sbuf, strlen(sbuf) + 1, 0,
-			   (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0)
-		errno_abort("send");
-
-#ifdef DEBUG
-	printf("send new file: %s\n", sbuf);
-#endif
-
-	close(fd);
+	snprintf(sbuf, sizeof(sbuf), "%d;%s", OWNER_REVOKED_RESOURCE, fileName.c_str());
+    genericBroadcast(OWNER_REVOKED_RESOURCE, sbuf);
 }
 
-void TorrentClient::BroadcastRevokeFile(std::string fileName){
-	struct sockaddr_in sendAddr, recvAddr;
-	int trueflag = 1;
-	int fd;
-	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		errno_abort("socket");
-
-	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
-				   &trueflag, sizeof trueflag) < 0)
-		errno_abort("setsockopt");
-
-	memset(&sendAddr, 0, sizeof sendAddr);
-	sendAddr.sin_family = AF_INET;
-	sendAddr.sin_port = (in_port_t) htons(SERVERPORT);
-	// broadcasting address for unix (?)
-	inet_aton("127.255.255.255", &sendAddr.sin_addr);
-
+void TorrentClient::broadcastFileDeleted(std::string fileName){
 	char sbuf[HEADER_SIZE+MAX_MESSAGE_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d;%s", REVOKE_FILE, fileName.c_str());
-
-	if (sendto(fd, sbuf, strlen(sbuf) + 1, 0,
-			   (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0)
-		errno_abort("send");
-
-#ifdef DEBUG
-	printf("send revoke: %s\n", sbuf);
-#endif
-
-	close(fd);
+	snprintf(sbuf, sizeof(sbuf), "%d;%s", NODE_DELETED_RESOURCE, fileName.c_str());
+    genericBroadcast(NODE_DELETED_RESOURCE, sbuf);
 }
 
-void TorrentClient::BroadcastFileDeleted(std::string fileName){
-	struct sockaddr_in sendAddr, recvAddr;
-	int trueflag = 1;
-	int fd;
-	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		errno_abort("socket");
-
-	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
-				   &trueflag, sizeof trueflag) < 0)
-		errno_abort("setsockopt");
-
-	memset(&sendAddr, 0, sizeof sendAddr);
-	sendAddr.sin_family = AF_INET;
-	sendAddr.sin_port = (in_port_t) htons(SERVERPORT);
-	// broadcasting address for unix (?)
-	inet_aton("127.255.255.255", &sendAddr.sin_addr);
-
-	char sbuf[HEADER_SIZE+MAX_MESSAGE_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d;%s", NO_LONGER_HAVE_FILE, fileName.c_str());
-
-	if (sendto(fd, sbuf, strlen(sbuf) + 1, 0,
-			   (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0)
-		errno_abort("send");
-
-#ifdef DEBUG
-	printf("send file deleted: %s\n", sbuf);
-#endif
-
-	close(fd);
-}
-
-void TorrentClient::BroadcastLogout(std::vector<std::string> fileList){
-	struct sockaddr_in sendAddr, recvAddr;
-	int trueflag = 1;
-	int fd;
-	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-		errno_abort("socket");
-
-	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST,
-				   &trueflag, sizeof trueflag) < 0)
-		errno_abort("setsockopt");
-
-	memset(&sendAddr, 0, sizeof sendAddr);
-	sendAddr.sin_family = AF_INET;
-	sendAddr.sin_port = (in_port_t) htons(SERVERPORT);
-	// broadcasting address for unix (?)
-	inet_aton("127.255.255.255", &sendAddr.sin_addr);
-
+void TorrentClient::broadcastLogout(std::vector<std::string> fileList){
 	std::stringstream ss;
 	for(const auto& f: fileList){
 		ss << ";" << f;
 	}
-
 	char sbuf[HEADER_SIZE] = {};
-	snprintf(sbuf, sizeof(sbuf), "%d%s", NODE_LOGOUT, ss.str().c_str());
-
-	if (sendto(fd, sbuf, strlen(sbuf) + 1, 0,
-			   (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0)
-		errno_abort("send");
-
-#ifdef DEBUG
-	printf("send logout: %s\n", sbuf);
-#endif
-
-	close(fd);
+	snprintf(sbuf, sizeof(sbuf), "%d%s", NODE_LEFT_NETWORK, ss.str().c_str());
+    genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
 
-///////////////////////////
 
-void *TorrentClient::runCliThread() {
-    /**
-     * 1. wypisz ze "trwa inicjalizacja" -> sleep(2s)
-     * while(true){
-     *  tutaj tez typowa pętla interfejsu, czyli:
-     *      1. pobierz polecenie od uzytkownika
-     *      2. oddeleguj odpowiedni wątek
-     *      3. wróc do pobierania poleceń
-     * }
-     * */
-    return nullptr;
-}
 
-///// TODO:
-
-void TorrentClient::addNewFile(char *message) {
-
-}
-
-void TorrentClient::revokeFile(char *message) {
-
-}
-
-void TorrentClient::nodeDeletedFile(char *message) {
-
-}
-
-void TorrentClient::addNewNode(char *message) {
-
-}
-
-void TorrentClient::nodeHaveBeenLogout(char *message) {
-
-}
+void TorrentClient::handleNewResourceAvailable(char *message) {}
+void TorrentClient::handleOwnerRevokedResource(char *message) {}
+void TorrentClient::handleNodeDeletedResource(char *message) {}
+void TorrentClient::handleNewNodeInNetwork(char *message) {}
+void TorrentClient::handleStateOfNode(char *message) {}
+void TorrentClient::handleNodeLeftNetwork(char *message) {}
 
 

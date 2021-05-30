@@ -6,6 +6,7 @@
 #include <map>
 #include "ResourceInfo.h"
 #include "PeerInfo.h"
+#include "Message.h"
 
 class TorrentClient {
 private:
@@ -19,48 +20,33 @@ private:
     std::mutex nodesMutex;
 
     void init();
-    void* runServerThread();
-    /**
-     * server specific thread/functions:
-     * -send chunk
-     * -revoke file - just set is_revoked bit to true -
-     * -synchronize with other node - check if you and the other has the same information about THE resource(ONLY) that one want to download
-     *
-     */
 
+    void* runTcpServerThread();
+    void* runUdpServerThread();
     void* runCliThread();
-    /**
-     * cli specific threads/functions:
-     * -print local files(not shared yet)
-     * -print local files(shared)
-     * -print available to download files(all - already downloaded)
-     * -revoke file(check hash and then broadcast)
-     * -download file
-     * */
+
+
+//broadcast functions
+    void genericBroadcast(UdpMessageCode code, char* payload);
+    void broadcastNewNode();
+    void broadcastNewFile(std::string fileName, std::string hash, int fileSize);
+    void broadcastRevokeFile(std::string fileName);
+    void broadcastFileDeleted(std::string fileName);
+    void broadcastLogout(std::vector<std::string> fileList);
+
+//functions handling broadcasted messages - UDP server
+    void handleNewResourceAvailable(char *message);
+    void handleOwnerRevokedResource(char *message);
+    void handleNodeDeletedResource(char *message);
+    void handleNewNodeInNetwork(char *message);
+    void handleStateOfNode(char *message);
+    void handleNodeLeftNetwork(char *message);
 public:
     void run();
 
-	void ServerRecv();
+	void serverRecv();
 
-	void addNewFile(char message[253]);
 
-	void BroadcastNewNode();
-
-	void BroadcastNewFile(std::string fileName, std::string hash, int fileSize);
-
-	void revokeFile(char message[253]);
-
-	void nodeDeletedFile(char message[253]);
-
-	void addNewNode(char message[253]);
-
-	void nodeHaveBeenLogout(char message[253]);
-
-	void BroadcastRevokeFile(std::string fileName);
-
-	void BroadcastFileDeleted(std::string fileName);
-
-	void BroadcastLogout(std::vector<std::string> fileList);
 };
 
 

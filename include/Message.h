@@ -16,10 +16,10 @@ enum TcpMessageCode {
 };
 enum UdpMessageCode {
     NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokeHash, sizeInBytes
-    OWNER_IS_REVOKING_RESOURCE=110,     // resourceName
-    NODE_GOT_RID_OF_RESOURCE=111,       // resourceName
+    OWNER_REVOKED_RESOURCE=110,         // resourceName
+    NODE_DELETED_RESOURCE=111,          // resourceName
     NEW_NODE_IN_NETWORK=120,            // EMPTY
-    STATE_TO_NEW_NODE=121,           // tablica krotek: (resourceName, revokeHash, sizeInBytes)
+    STATE_OF_NODE=121,                  // tablica krotek: (resourceName, revokeHash, sizeInBytes)
     NODE_LEFT_NETWORK=130,              // EMPTY - w sprawku napisalem ze przesyla to co miał, ale to w zasadzie niepotrzebne
 };
 
