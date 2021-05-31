@@ -2,7 +2,7 @@
 #define TIN_TORRENTLIKEP2P_SERIALIZATIONUTILS_H
 
 #include <vector>
-#include "ResourceInfo.h"
+#include "structs/ResourceInfo.h"
 
 class SerializationUtils {
     char* serializeResourceInfo(ResourceInfo);

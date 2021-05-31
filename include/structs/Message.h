@@ -2,6 +2,8 @@
 #define TIN_TORRENTLIKEP2P_MESSAGE_H
 
 #define MAX_SIZE_OF_PAYLOAD 512
+#define HEADER_SIZE 3
+#define MAX_MESSAGE_SIZE HEADER_SIZE+MAX_SIZE_OF_PAYLOAD
 
 
 //      NAZWA=KOD                       CO PRZESYLAMY
@@ -21,6 +23,15 @@ enum UdpMessageCode {
     NEW_NODE_IN_NETWORK=120,            // EMPTY
     STATE_OF_NODE=121,                  // tablica krotek: (resourceName, revokeHash, sizeInBytes)
     NODE_LEFT_NETWORK=130,              // EMPTY - w sprawku napisalem ze przesyla to co miał, ale to w zasadzie niepotrzebne
+};
+
+enum ClientCommand {
+    ADD_NEW_RESOURCE,
+    LIST_AVAILABLE_RESOURCES,
+    FIND_RESOURCE,
+    DOWNLOAD_RESOURCE,
+    REVOKE_RESOURCE,
+    EXIT
 };
 
 
