@@ -26,7 +26,7 @@ void TorrentClient::run() {
 }
 
 void TorrentClient::handleExit() {
-
+    close(broadcastSocket);
 }
 
 void TorrentClient::signalHandler() {
@@ -37,7 +37,9 @@ void TorrentClient::signalHandler() {
 void TorrentClient::receive(int socket, bool tcp){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
+    struct sockaddr_in clientAddr;
+    socklen_t clientLength = sizeof(sockaddr_in);
+    if (recvfrom(socket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
         perror("receive error");
         exit(EXIT_FAILURE);
     }
@@ -52,9 +54,9 @@ void TorrentClient::receive(int socket, bool tcp){
     snprintf(header, sizeof(header), "%s", rbuf);
     snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
     if(tcp){
-        handleTcpMessage(header, payload);
+        handleTcpMessage(header, payload, clientAddr);
     }else{
-        handleUdpMessage(header, payload);
+        handleUdpMessage(header, payload, clientAddr);
     }
 
 }
@@ -122,7 +124,7 @@ int TorrentClient::acceptClient() {
 }
 
 
-void TorrentClient::handleTcpMessage(char *header, char *payload) {
+void TorrentClient::handleTcpMessage(char *header, char *payload, sockaddr_in sockaddr) {
     switch (atoi(header)) {
         case DEMAND_CHUNK:
             handleDemandChunk(payload);
@@ -179,7 +181,7 @@ void TorrentClient::handleErrorWhileSending(char *payload) {
  *
  */
 
-void TorrentClient::handleUdpMessage(char *header, char *payload) {
+void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr) {
     switch (atoi(header)) {
         case NEW_RESOURCE_AVAILABLE:
             handleNewResourceAvailable(payload);
@@ -191,7 +193,7 @@ void TorrentClient::handleUdpMessage(char *header, char *payload) {
             handleNodeDeletedResource(payload);
             break;
         case NEW_NODE_IN_NETWORK:
-            handleNewNodeInNetwork(payload);
+            handleNewNodeInNetwork(payload, sockaddr);
             break;
         case STATE_OF_NODE:
             handleStateOfNode(payload);
@@ -202,13 +204,14 @@ void TorrentClient::handleUdpMessage(char *header, char *payload) {
     }
 }
 
-void errno_abort(std::string header){
+void errno_abort(const std::string& header){
     perror(header.c_str());
     exit(EXIT_FAILURE);
 }
 
 [[noreturn]] void TorrentClient::runUdpServerThread() {
     initUdp();
+    broadcastNewNode();
     while (true){
         receive(udpSocket, false);
     }
@@ -233,25 +236,24 @@ void TorrentClient::initUdp() {
         errno_abort("bind");
     }
 
-}
 
-void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
-    struct sockaddr_in sendAddr, recvAddr;
-    int trueFlag = 1;
-    int fd;
-    if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    if((broadcastSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
 
-    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &trueFlag, sizeof trueFlag) < 0) {
+    if (setsockopt(broadcastSocket, SOL_SOCKET, SO_BROADCAST, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");
     }
 
-    memset(&sendAddr, 0, sizeof sendAddr);
-    sendAddr.sin_family = AF_INET;
-    sendAddr.sin_port = (in_port_t) htons(port);
+    memset(&broadcastAddress, 0, sizeof broadcastAddress);
+    broadcastAddress.sin_family = AF_INET;
+    broadcastAddress.sin_port = (in_port_t) htons(port);
     // broadcasting address for unix (?)
-    inet_aton("127.255.255.255", &sendAddr.sin_addr);
+    inet_aton("127.255.255.255", &broadcastAddress.sin_addr);
+
+}
+
+void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) const {
 
     // dont know if addr will be needed
 //	char sbuf[HEADER_SIZE+5] = {};
@@ -260,7 +262,7 @@ void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
 
-    if (sendto(fd, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &sendAddr, sizeof sendAddr) < 0) {
+    if (sendto(broadcastSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &broadcastAddress, sizeof broadcastAddress) < 0) {
         errno_abort("send");
     }
 
@@ -268,7 +270,6 @@ void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
     printf("send new node: %s\n", sbuf);
 #endif
 
-    close(fd);
 }
 
 
@@ -305,18 +306,38 @@ void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
         ss << ";" << resource.resourceName;
     }
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str()); //todo tu chyba trzeba w pętli bo 512 może być za mało
     genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
 
 
 //te funkcje handlujące nie tworzą nowych nitek deserializacja i aktualizacja struktur
-void TorrentClient::handleNewResourceAvailable(char *message) {}
-void TorrentClient::handleOwnerRevokedResource(char *message) {}
-void TorrentClient::handleNodeDeletedResource(char *message) {}
-void TorrentClient::handleNewNodeInNetwork(char *message) {}
-void TorrentClient::handleStateOfNode(char *message) {}
-void TorrentClient::handleNodeLeftNetwork(char *message) {}
+void TorrentClient::handleNewResourceAvailable(char *message) {
+
+}
+
+void TorrentClient::handleOwnerRevokedResource(char *message) {
+
+}
+
+void TorrentClient::handleNodeDeletedResource(char *message) {
+
+}
+
+void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) {
+    nodes_.insert(std::make_pair(std::make_pair(sockaddr.sin_addr.s_addr, sockaddr.sin_port), PeerInfo(sockaddr)));
+    sendMyState(sockaddr);
+}
+
+
+
+void TorrentClient::handleStateOfNode(char *message) {
+
+}
+
+void TorrentClient::handleNodeLeftNetwork(char *message) {
+
+}
 
 /**
  *
@@ -374,6 +395,24 @@ void TorrentClient::handleDownloadResource(const std::string& resourceName) {
 
 void TorrentClient::handleRevokeResource(const std::string& resourceName) {
 
+}
+
+void TorrentClient::sendMyState(sockaddr_in newPeer) {
+    std::stringstream ss;
+    for(const auto& resource: localResources){
+        ss << ";" << resource.resourceName;
+    }
+    char payload[MAX_SIZE_OF_PAYLOAD] = {};
+    snprintf(payload, sizeof(payload), "%s", ss.str().c_str()); //todo tu chyba trzeba w pętli bo 512 może być za mało
+
+
+    char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+
+    snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
+
+    if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
+        errno_abort("send");
+    }
 }
 
 

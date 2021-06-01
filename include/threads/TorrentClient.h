@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <map>
+#include <bits/socket.h>
 
 #include "../structs/Message.h"
 #include "../structs/ResourceInfo.h"
@@ -20,14 +21,13 @@ public:
 
     void run();
 
-    void serverRecv();//ta funkcja to chyba w UdpServer będzie
-
     void signalHandler();
 private:
     // w sprawku napisalsimy ze bedzie mapa<nazwazasobu - metadane> i mozemy tak zrobić, na razie zostawiam tak
     std::vector<ResourceInfo> localResources; //mozliwe ze bedize trzeba inna strukture zamiast generyczną
     std::vector<ResourceInfo> networkResources;
-    std::vector<PeerInfo> nodes;
+//    std::vector<PeerInfo> nodes;
+    std::map<std::pair<unsigned long, unsigned short>, PeerInfo> nodes_;
     std::vector<int> connectedClients;
 
     std::mutex localResourcesMutex;
@@ -36,7 +36,8 @@ private:
     bool keepGoing;
     int udpSocket;
     int tcpSocket;
-
+    struct sockaddr_in broadcastAddress;
+    int broadcastSocket;
 
     const int port = 5555;
     const std::string address = "127.0.0.1";
@@ -61,10 +62,9 @@ private:
 
     void handleExit();
 
-    void handleTcpClient(int clientSocket);
 
 //broadcast functions
-    void genericBroadcast(UdpMessageCode code, char* payload);
+    void genericBroadcast(UdpMessageCode code, char* payload) const;
     void broadcastNewNode();
     void broadcastNewFile(const ResourceInfo& resource);
     void broadcastRevokeFile(const ResourceInfo& resource);
@@ -75,7 +75,7 @@ private:
     void handleNewResourceAvailable(char *message);
     void handleOwnerRevokedResource(char *message);
     void handleNodeDeletedResource(char *message);
-    void handleNewNodeInNetwork(char *message);
+
     void handleStateOfNode(char *message);
     void handleNodeLeftNetwork(char *message);
 
@@ -92,13 +92,16 @@ private:
 
     void handleErrorWhileSending(char *payload);
 
-    void receive(int socket);
-
     void receive(int socket, bool tcp);
 
-    void handleTcpMessage(char *header, char *payload);
 
-    void handleUdpMessage(char *header, char *payload);
+    void handleTcpMessage(char *header, char *payload, sockaddr_in sockaddr);
+
+    void handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr);
+
+    void handleNewNodeInNetwork(char *message, sockaddr_in sockaddr);
+
+    void sendMyState(sockaddr_in in);
 };
 
 
