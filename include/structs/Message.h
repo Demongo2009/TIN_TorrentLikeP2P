@@ -4,12 +4,13 @@
 #define MAX_SIZE_OF_PAYLOAD 512
 #define HEADER_SIZE 3
 #define MAX_MESSAGE_SIZE HEADER_SIZE+MAX_SIZE_OF_PAYLOAD
+#define CHUNK_SIZE MAX_SIZE_OF_PAYLOAD-3
 
 
 //      NAZWA=KOD                       CO PRZESYLAMY
 enum TcpMessageCode {
     DEMAND_CHUNK=140,                   // resourceName, indexOfChunk
-    MY_STATE_BEFORE_FILE_SENDING=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
+    MY_STATE_BEFORE_FILE_TRANSFER=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
     CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
     ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
     ERROR_WHILE_SENDING=540,            // EMPTY
@@ -43,10 +44,12 @@ enum ClientCommand {
  *      2.podczas wysylania/odbierania kazdego komunikatu trzeba bedzie sprwdzac
  *      kod a potem w zalenosci od niego odpowienio serializowac/deserialziowac.
 */
- struct TcpMessagePayload {
-    unsigned int sizeOfPayload;
-    char payload[MAX_SIZE_OF_PAYLOAD - sizeof(unsigned int)];
+ struct DemandChunkMessage {
+    std::string resourceName;
+    std::vector<unsigned int> chunkIndices;
 };
+
+
 
 
 #endif //TIN_TORRENTLIKEP2P_MESSAGE_H

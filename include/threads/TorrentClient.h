@@ -10,8 +10,6 @@
 #include "../structs/ResourceInfo.h"
 #include "../structs/PeerInfo.h"
 
-#define SERVERPORT 5555
-#define SERVERADDR 1981001006
 
 class TorrentClient {
 public:
@@ -23,18 +21,14 @@ public:
 
     void signalHandler();
 private:
-    // w sprawku napisalsimy ze bedzie mapa<nazwazasobu - metadane> i mozemy tak zrobić, na razie zostawiam tak
-//    std::vector<ResourceInfo> localResources; //mozliwe ze bedize trzeba inna strukture zamiast generyczną
-//    std::vector<ResourceInfo> networkResources;
-//    std::vector<PeerInfo> nodes;
-//    std::map<std::pair<unsigned long, unsigned short>, PeerInfo> nodes_;
     std::map<std::string , ResourceInfo> localResources_;
     std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources_;
     std::vector<int> connectedClients;
 
+    std::map<std::string, std::string> filepaths;
+
     std::mutex localResourcesMutex;
     std::mutex networkResourcesMutex;
-    std::mutex nodesMutex;
     bool keepGoing;
     int udpSocket;
     int tcpSocket;
@@ -87,22 +81,22 @@ private:
     void handleNodeLeftNetwork(char *message, sockaddr_in sockaddr);
 
 
-    void handleDemandChunk(char *payload);
+    void handleDemandChunk(char *payload, int sockaddr);
 
-    void handleMyStateBeforeFileSending(char *payload);
+    void handleMyStateBeforeFileTransfer(char *payload, int sockaddr);
 
-    void handleChunkTransfer(char *payload);
+    void handleChunkTransfer(char *payload, int sockaddr);
 
-    void handleErrorAfterSynchronization(char *payload);
+    void handleErrorAfterSynchronization(char *payload, int sockaddr);
 
-    void handleErrorWhileReceiving(char *payload);
+    void handleErrorWhileReceiving(char *payload, int sockaddr);
 
-    void handleErrorWhileSending(char *payload);
+    void handleErrorWhileSending(char *payload, int sockaddr);
 
     void receive(int socket, bool tcp);
 
 
-    void handleTcpMessage(char *header, char *payload, sockaddr_in sockaddr);
+    void handleTcpMessage(char *header, char *payload, int socket);
 
     void handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr);
 
@@ -119,7 +113,23 @@ private:
     static std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
         return std::make_pair(address.sin_addr.s_addr, address.sin_port);
     }
+
+    void demandChunkJob(char *payload, int sockaddr);
+
+    void stateBeforeFileTransferJob(char *payload, int sockaddr);
+
+    void chunkTransferJob(char *payload, int sockaddr);
+
+    void errorAfterSyncJob(char *payload, int sockaddr);
+
+    void errorWhileReceivingJob(char *payload, int sockaddr);
+
+    void errorWhileSendingJob(char *payload, int sockaddr);
 };
 
+void errno_abort(const std::string& header){
+    perror(header.c_str());
+    exit(EXIT_FAILURE);
+}
 
 #endif //TIN_TORRENTLIKEP2P_TORRENTCLIENT_H
