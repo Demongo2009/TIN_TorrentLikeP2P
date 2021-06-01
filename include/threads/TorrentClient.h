@@ -24,11 +24,12 @@ public:
     void signalHandler();
 private:
     // w sprawku napisalsimy ze bedzie mapa<nazwazasobu - metadane> i mozemy tak zrobić, na razie zostawiam tak
-    std::vector<ResourceInfo> localResources; //mozliwe ze bedize trzeba inna strukture zamiast generyczną
-    std::vector<ResourceInfo> networkResources;
+//    std::vector<ResourceInfo> localResources; //mozliwe ze bedize trzeba inna strukture zamiast generyczną
+//    std::vector<ResourceInfo> networkResources;
 //    std::vector<PeerInfo> nodes;
     std::map<std::pair<unsigned long, unsigned short>, PeerInfo> nodes_;
     std::map<std::string , ResourceInfo> localResources_;
+    std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources_;
     std::vector<int> connectedClients;
 
     std::mutex localResourcesMutex;
@@ -59,7 +60,7 @@ private:
 
     void handleDownloadResource(const std::string& basicString);
 
-    void handleRevokeResource(const std::string& basicString);
+    void handleRevokeResource(const std::string& basicString, const std::string& password);
 
     void handleExit();
 
@@ -73,12 +74,12 @@ private:
     void broadcastLogout(const std::vector<ResourceInfo>& resources);
 
 //functions handling broadcasted messages - UDP server
-    void handleNewResourceAvailable(char *message);
-    void handleOwnerRevokedResource(char *message);
-    void handleNodeDeletedResource(char *message);
+    void handleNewResourceAvailable(char *message, sockaddr_in sockaddr);
+    void handleOwnerRevokedResource(char *message, sockaddr_in sockaddr);
+    void handleNodeDeletedResource(char *message, sockaddr_in sockaddr);
 
-    void handleStateOfNode(char *message);
-    void handleNodeLeftNetwork(char *message);
+    void handleStateOfNode(char *message, sockaddr_in sockaddr);
+    void handleNodeLeftNetwork(char *message, sockaddr_in sockaddr);
 
 
     void handleDemandChunk(char *payload);
@@ -103,6 +104,16 @@ private:
     void handleNewNodeInNetwork(char *message, sockaddr_in sockaddr);
 
     void sendMyState(sockaddr_in in);
+
+    void listResourcesJob();
+
+    void downloadResourceJob(const std::string &resource);
+
+    void findResourceJob(const std::string &resource);
+
+    static std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
+        return std::make_pair(address.sin_addr.s_addr, address.sin_port);
+    }
 };
 
 

@@ -184,22 +184,22 @@ void TorrentClient::handleErrorWhileSending(char *payload) {
 void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr) {
     switch (atoi(header)) {
         case NEW_RESOURCE_AVAILABLE:
-            handleNewResourceAvailable(payload);
+            handleNewResourceAvailable(payload, sockaddr);
             break;
         case OWNER_REVOKED_RESOURCE:
-            handleOwnerRevokedResource(payload);
+            handleOwnerRevokedResource(payload, sockaddr);
             break;
         case NODE_DELETED_RESOURCE:
-            handleNodeDeletedResource(payload);
+            handleNodeDeletedResource(payload, sockaddr);
             break;
         case NEW_NODE_IN_NETWORK:
             handleNewNodeInNetwork(payload, sockaddr);
             break;
         case STATE_OF_NODE:
-            handleStateOfNode(payload);
+            handleStateOfNode(payload, sockaddr);
             break;
         case NODE_LEFT_NETWORK:
-            handleNodeLeftNetwork(payload);
+            handleNodeLeftNetwork(payload, sockaddr);
             break;
     }
 }
@@ -281,9 +281,9 @@ void TorrentClient::broadcastNewNode(){
 void TorrentClient::broadcastNewFile(const ResourceInfo& resource) {
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(sbuf, sizeof(sbuf),
-             "%s;%s;%d",
+             "%s;%lu;%d",
              resource.resourceName.c_str(),
-             resource.revokeHash.c_str(),
+             resource.revokeHash,
              resource.sizeInBytes);
     genericBroadcast(NEW_RESOURCE_AVAILABLE, sbuf);
 }
@@ -312,15 +312,15 @@ void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
 
 
 //te funkcje handlujące nie tworzą nowych nitek deserializacja i aktualizacja struktur
-void TorrentClient::handleNewResourceAvailable(char *message) {
+void TorrentClient::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
 
 }
 
-void TorrentClient::handleOwnerRevokedResource(char *message) {
+void TorrentClient::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
 
 }
 
-void TorrentClient::handleNodeDeletedResource(char *message) {
+void TorrentClient::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
 
 }
 
@@ -333,12 +333,19 @@ void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) 
 
 
 
-void TorrentClient::handleStateOfNode(char *message) {
-
+void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
+    networkResourcesMutex.lock();
+    std::vector<ResourceInfo> resources = deserialize(message);
+    for(const auto & r : resources){
+        networkResources_[convertAddress(sockaddr)][r.resourceName] = r;
+    }
+    networkResourcesMutex.unlock();
 }
 
-void TorrentClient::handleNodeLeftNetwork(char *message) {
-
+void TorrentClient::handleNodeLeftNetwork(char *message, sockaddr_in sockaddr) {
+    nodesMutex.lock();
+    nodes_.erase(convertAddress(sockaddr));
+    nodesMutex.unlock();
 }
 
 /**
@@ -353,10 +360,10 @@ void TorrentClient::runCliThread() {
 
     while(keepGoing){
         ClientCommand parsedCommand;
-        std::string filepath, resourceName;
+        std::string userString, resourceName;
         switch (parsedCommand) {
             case ADD_NEW_RESOURCE:
-                handleClientAddResource(filepath, resourceName);
+                handleClientAddResource(resourceName, userString);
                 break;
             case LIST_AVAILABLE_RESOURCES:
                 handleClientListResources();
@@ -368,7 +375,7 @@ void TorrentClient::runCliThread() {
                 handleDownloadResource(resourceName);
                 break;
             case REVOKE_RESOURCE:
-                handleRevokeResource(resourceName);
+                handleRevokeResource(resourceName, userString);
                 break;
             case EXIT:
                 handleExit();
@@ -379,26 +386,42 @@ void TorrentClient::runCliThread() {
 }
 
 //te nowe nitki robią
-void TorrentClient::handleClientAddResource(const std::string& filepath, const std::string& resourceName) {
+void TorrentClient::handleClientAddResource(const std::string& resourceName, const std::string& filepath) {
 
 }
 
 void TorrentClient::handleClientListResources() {
+    std::thread findThread(&TorrentClient::listResourcesJob, this);
+}
+
+void TorrentClient::listResourcesJob(){
 
 }
 
 void TorrentClient::handleClientFindResource(const std::string& resourceName) {
+    std::thread findThread(&TorrentClient::findResourceJob, this, resourceName);
+}
+
+void TorrentClient::findResourceJob(const std::string& resource){
 
 }
+
 
 void TorrentClient::handleDownloadResource(const std::string& resourceName) {
+    std::thread findThread(&TorrentClient::downloadResourceJob, this, resourceName);
+}
+
+void TorrentClient::downloadResourceJob(const std::string& resource){
 
 }
 
-void TorrentClient::handleRevokeResource(const std::string& resourceName) {
+
+void TorrentClient::handleRevokeResource(const std::string& resourceName, const std::string& userPassword) {
     localResourcesMutex.lock();
-    if(!localResources_.at(resourceName).isThisPeerAuthor){
+    std::size_t hash = std::hash<std::string>{}(userPassword);
+    if(localResources_.at(resourceName).revokeHash != hash ){
         std::cout<<"YOU HAVE NO RIGHT SIR"<<std::endl;
+        return;
     }
     localResources_.at(resourceName).isRevoked = true;
     localResourcesMutex.unlock();

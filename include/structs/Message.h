@@ -9,7 +9,7 @@
 //      NAZWA=KOD                       CO PRZESYLAMY
 enum TcpMessageCode {
     DEMAND_CHUNK=140,                   // resourceName, indexOfChunk
-    MY_STATE_BEFORE_FILE_SENDING=141,   // tablica krotek: (resourceName, revokeHash, sizeInBytes)
+    MY_STATE_BEFORE_FILE_SENDING=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
     CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
     ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
     ERROR_WHILE_SENDING=540,            // EMPTY
@@ -17,11 +17,11 @@ enum TcpMessageCode {
 
 };
 enum UdpMessageCode {
-    NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokeHash, sizeInBytes
+    NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokePassword, sizeInBytes
     OWNER_REVOKED_RESOURCE=110,         // resourceName
     NODE_DELETED_RESOURCE=111,          // resourceName
     NEW_NODE_IN_NETWORK=120,            // EMPTY
-    STATE_OF_NODE=121,                  // tablica krotek: (resourceName, revokeHash, sizeInBytes)
+    STATE_OF_NODE=121,                  // tablica krotek: (resourceName, revokePassword, sizeInBytes)
     NODE_LEFT_NETWORK=130,              // EMPTY - w sprawku napisalem ze przesyla to co miał, ale to w zasadzie niepotrzebne
 };
 
