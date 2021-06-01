@@ -42,7 +42,8 @@ private:
 
     const int port = 5555;
     const std::string address = "127.0.0.1";
-    void initUdp();
+	const int MAX_FILE_NAME_SIZE = 256;
+	void initUdp();
     void initTcp();
     int acceptClient();
 
@@ -62,6 +63,10 @@ private:
     void handleRevokeResource(const std::string& basicString);
 
     void handleExit();
+
+	ClientCommand parseCommand(std::vector<std::string> vecWord, std::string &filepath,
+			std::string &resourceName, bool &foundCommand);
+	void parseResourceName(std::vector<std::string> vecWord, std::string &resourceName, bool& foundCommand);
 
 
 //broadcast functions

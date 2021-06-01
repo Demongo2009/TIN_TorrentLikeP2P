@@ -255,11 +255,11 @@ void TorrentClient::initUdp() {
 
 void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) const {
 
-    // dont know if addr will be needed
-//	char sbuf[HEADER_SIZE+5] = {};
-//	snprintf(sbuf, sizeof(sbuf), "%d;%d:%d", NEW_NODE, SERVERADDR, SERVERPORT);
-
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    if( strlen(payload) > MAX_SIZE_OF_PAYLOAD ){
+    	std::cout << "The payload is too big!\n";
+		return;
+    }
     snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
 
     if (sendto(broadcastSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &broadcastAddress, sizeof broadcastAddress) < 0) {
@@ -302,12 +302,18 @@ void TorrentClient::broadcastFileDeleted(const ResourceInfo& resource){
 
 void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
     std::stringstream ss;
-    for(const auto& resource: resources){
+	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+
+	for(const auto& resource: resources){
+    	if(ss.str().size() + resource.resourceName.size() > MAX_SIZE_OF_PAYLOAD){
+			snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+			genericBroadcast(NODE_LEFT_NETWORK, sbuf);
+			ss.clear();
+    	}
         ss << ";" << resource.resourceName;
     }
-    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str()); //todo tu chyba trzeba w pętli bo 512 może być za mało
-    genericBroadcast(NODE_LEFT_NETWORK, sbuf);
+	snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+	genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
 
 
@@ -350,32 +356,139 @@ void TorrentClient::handleNodeLeftNetwork(char *message) {
 
 void TorrentClient::runCliThread() {
     //KUBA SPARSUJ
+    // k
+
+	std::stringstream ss;
+	std::string line;
+	std::string prompt = "\nPlease input command:\n"
+						 "new <filePath> <resourceName>\n"
+						 "list\n"
+						 "find <resourceName>\n"
+						 "download <resourceName>\n"
+						 "revoke <resourceName>\n"
+						 "q (in order to quit)\n"
+						 "Please input resourceNames shorter than " << MAX_FILE_NAME_SIZE << "\n";
+	std::cout << prompt;
+	std::getline(std::cin, line);
+	std::vector<std::string> vecWord;
 
     while(keepGoing){
         ClientCommand parsedCommand;
         std::string filepath, resourceName;
-        switch (parsedCommand) {
-            case ADD_NEW_RESOURCE:
-                handleClientAddResource(filepath, resourceName);
-                break;
-            case LIST_AVAILABLE_RESOURCES:
-                handleClientListResources();
-                break;
-            case FIND_RESOURCE:
-                handleClientFindResource(resourceName);
-                break;
-            case DOWNLOAD_RESOURCE:
-                handleDownloadResource(resourceName);
-                break;
-            case REVOKE_RESOURCE:
-                handleRevokeResource(resourceName);
-                break;
-            case EXIT:
-                handleExit();
-                keepGoing = false;
-                break;
-        }
+
+		ss << line;
+		for(std::string s; ss >>s;){
+			vecWord.push_back(s);
+		}
+
+		bool foundCommand= true;
+		parsedCommand = parseCommand(vecWord, filepath, resourceName, foundCommand);
+
+		if(foundCommand){
+			switch (parsedCommand) {
+				case ADD_NEW_RESOURCE:
+					handleClientAddResource(filepath, resourceName);
+					break;
+				case LIST_AVAILABLE_RESOURCES:
+					handleClientListResources();
+					break;
+				case FIND_RESOURCE:
+					handleClientFindResource(resourceName);
+					break;
+				case DOWNLOAD_RESOURCE:
+					handleDownloadResource(resourceName);
+					break;
+				case REVOKE_RESOURCE:
+					handleRevokeResource(resourceName);
+					break;
+				case EXIT:
+					handleExit();
+					keepGoing = false;
+					break;
+			}
+		}
+
+		ss.clear();
+		vecWord.clear();
+		std::cout << prompt;
+		std::getline(std::cin, line);
     }
+
+    // clean before quit?
+}
+
+ClientCommand TorrentClient::parseCommand(std::vector<std::string> vecWord, std::string &filepath,
+										  std::string &resourceName, bool &foundCommand){
+	ClientCommand parsedCommand = EXIT;
+	if(vecWord[0] == "new") {
+		parsedCommand = ADD_NEW_RESOURCE;
+
+		if(vecWord.size() > 1){
+			filepath = vecWord[1];
+		}else{
+			std::cout << "You must input file path!\n";
+			foundCommand = false;
+			return parsedCommand;
+		}
+
+		if(vecWord.size() > 2){
+			resourceName = vecWord[2];
+		}else{
+			std::cout << "You must input file name!\n";
+			foundCommand = false;
+			return parsedCommand;
+		}
+
+		if(resourceName.size() > MAX_FILE_NAME_SIZE){
+			std::cout << "File name too long! Has: " << resourceName.size() << "\n";
+			foundCommand = false;
+			return parsedCommand;
+		}
+
+	} else if(vecWord[0] == "list"){
+		parsedCommand = LIST_AVAILABLE_RESOURCES;
+
+	} else if(vecWord[0] == "find"){
+		parsedCommand = FIND_RESOURCE;
+
+		parseResourceName(vecWord, resourceName, foundCommand);
+
+
+	} else if(vecWord[0] == "download"){
+		parsedCommand = DOWNLOAD_RESOURCE;
+
+		parseResourceName(vecWord, resourceName, foundCommand);
+
+
+	} else if(vecWord[0] == "revoke"){
+		parsedCommand = REVOKE_RESOURCE;
+
+		parseResourceName(vecWord, resourceName, foundCommand);
+
+	} else if(vecWord[0] == "q"){
+		parsedCommand = EXIT;
+
+	}else{
+		std::cout << "Unrecognised command!\n";
+		foundCommand = false;
+	}
+
+	return parsedCommand;
+}
+
+void TorrentClient::parseResourceName(std::vector<std::string> vecWord, std::string &resourceName, bool& foundCommand){
+	if(vecWord.size() > 1){
+		resourceName = vecWord[1];
+	}else{
+		std::cout << "You must input file name!\n";
+		foundCommand = false;
+		return;
+	}
+
+	if(resourceName.size() > MAX_FILE_NAME_SIZE){
+		std::cout << "File name too long! Has: " << resourceName.size() << "\n";
+		foundCommand = false;
+	}
 }
 
 //te nowe nitki robią
