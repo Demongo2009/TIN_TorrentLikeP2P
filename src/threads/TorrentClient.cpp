@@ -1,16 +1,15 @@
 #include <thread>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <cassert>
 #include <cstring>
 #include <unistd.h>
-#include <sstream>
 #include <iostream>
+#include <string>
+#include <sstream>
 
 #include "../../include/threads/TorrentClient.h"
-#include "../../include/structs/Message.h"
+
 
 void TorrentClient::run() {
     std::thread serverUdpThread(&TorrentClient::runUdpServerThread, this);
@@ -26,13 +25,45 @@ void TorrentClient::run() {
      */
 }
 
-[[noreturn]] void TorrentClient::runUdpServerThread() {
-    initUdp();
-    while (true){
-        serverRecv();
-    }
+void TorrentClient::handleExit() {
+
 }
 
+void TorrentClient::signalHandler() {
+    keepGoing = false;
+    handleExit();
+}
+
+void TorrentClient::receive(int socket, bool tcp){
+    char rbuf[MAX_MESSAGE_SIZE];
+    memset(rbuf, 0, MAX_MESSAGE_SIZE);
+    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
+        perror("receive error");
+        exit(EXIT_FAILURE);
+    }
+
+#ifdef DEBUG
+    printf("recv: %s\n", rbuf);
+#endif
+    char header[HEADER_SIZE];
+    char payload[MAX_SIZE_OF_PAYLOAD];
+    memset(header, 0, HEADER_SIZE);
+    memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
+    snprintf(header, sizeof(header), "%s", rbuf);
+    snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
+    if(tcp){
+        handleTcpMessage(header, payload);
+    }else{
+        handleUdpMessage(header, payload);
+    }
+
+}
+
+/**
+ *
+ * TCP BLOCK
+ *
+ */
 void TorrentClient::initTcp(){
     struct sockaddr_in serverAddr;
 
@@ -65,19 +96,18 @@ void TorrentClient::initTcp(){
 int TorrentClient::acceptClient() {
     printf("waiting for client...\n");
     struct sockaddr_in clientAddr;
-
-    int clientSocket = accept(socketFileDescriptor, (struct sockaddr *) &clientAddr, &serverAddressLength);
+    socklen_t size = sizeof(clientAddr);
+    int clientSocket = accept(tcpSocket, (struct sockaddr *) &clientAddr, &size);
     if (clientSocket == -1){
         printf("ACCEPT ERROR: %s\n", strerror(errno));
     }
 
-    int clientAddressLength = sizeof(clientAddr);
-    currentReturnCode = getpeername(clientSocket, (struct sockaddr *) &clientAddr, &clientAddressLength);
+    int currentReturnCode = getpeername(clientSocket, (struct sockaddr *) &clientAddr, &size);
     if (currentReturnCode == -1){
         printf("GETPEERNAME ERROR: %s\n", strerror(errno));
     }
     else {
-        std::cout<<"Client address: "<<clientAddr.sin_addr;
+        std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr);
     }
     connectedClients.emplace_back(clientSocket);
     return clientSocket;
@@ -87,47 +117,122 @@ int TorrentClient::acceptClient() {
 
     initTcp();
     while (true) {
-        handleTcpClient(acceptClient());
+        receive(acceptClient(), true);
     }
 }
 
-void TorrentClient::runCliThread() {
-    //KUBA SPARSUJ
 
-    while(keepGoing){
-        ClientCommand parsedCommand;
-        std::string filepath, resourceName;
-        switch (parsedCommand) {
-            case ADD_NEW_RESOURCE:
-                handleClientAddResource(filepath, resourceName);
-                break;
-            case LIST_AVAILABLE_RESOURCES:
-                handleClientListResources();
-                break;
-            case FIND_RESOURCE:
-                handleClientFindResource(resourceName);
-                break;
-            case DOWNLOAD_RESOURCE:
-                handleDownloadResource(resourceName);
-                break;
-            case REVOKE_RESOURCE:
-                handleRevokeResource(resourceName);
-                break;
-            case EXIT:
-                handleExit();
-                keepGoing = false;
-                break;
-        }
+void TorrentClient::handleTcpMessage(char *header, char *payload) {
+    switch (atoi(header)) {
+        case DEMAND_CHUNK:
+            handleDemandChunk(payload);
+            break;
+        case MY_STATE_BEFORE_FILE_SENDING:
+            handleMyStateBeforeFileSending(payload);
+            break;
+        case CHUNK_TRANSFER:
+            handleChunkTransfer(payload);
+            break;
+        case ERROR_AFTER_SYNCHRONIZATION:
+            handleErrorAfterSynchronization(payload);
+            break;
+        case ERROR_WHILE_RECEIVING:
+            handleErrorWhileReceiving(payload);
+            break;
+        case ERROR_WHILE_SENDING:
+            handleErrorWhileSending(payload);
+            break;
     }
 }
 
 
 // sending convention HEADER , {';' , MESSAGE_ELEMENT};
 
-void errno_abort(const char* header)
-{
-	perror(header);
-	exit(EXIT_FAILURE);
+void TorrentClient::handleDemandChunk(char *payload) {
+
+}
+
+void TorrentClient::handleMyStateBeforeFileSending(char *payload) {
+
+}
+
+void TorrentClient::handleChunkTransfer(char *payload) {
+
+}
+
+void TorrentClient::handleErrorAfterSynchronization(char *payload) {
+
+}
+
+void TorrentClient::handleErrorWhileReceiving(char *payload) {
+
+}
+
+void TorrentClient::handleErrorWhileSending(char *payload) {
+
+}
+
+
+/**
+ *
+ * UDP BLOCK
+ *
+ */
+
+void TorrentClient::handleUdpMessage(char *header, char *payload) {
+    switch (atoi(header)) {
+        case NEW_RESOURCE_AVAILABLE:
+            handleNewResourceAvailable(payload);
+            break;
+        case OWNER_REVOKED_RESOURCE:
+            handleOwnerRevokedResource(payload);
+            break;
+        case NODE_DELETED_RESOURCE:
+            handleNodeDeletedResource(payload);
+            break;
+        case NEW_NODE_IN_NETWORK:
+            handleNewNodeInNetwork(payload);
+            break;
+        case STATE_OF_NODE:
+            handleStateOfNode(payload);
+            break;
+        case NODE_LEFT_NETWORK:
+            handleNodeLeftNetwork(payload);
+            break;
+    }
+}
+
+void errno_abort(std::string header){
+    perror(header.c_str());
+    exit(EXIT_FAILURE);
+}
+
+[[noreturn]] void TorrentClient::runUdpServerThread() {
+    initUdp();
+    while (true){
+        receive(udpSocket, false);
+    }
+}
+
+void TorrentClient::initUdp() {
+    struct sockaddr_in recv_addr;
+    int trueFlag = 1;
+    if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        errno_abort("socket");
+    }
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
+        errno_abort("setsockopt");
+    }
+
+    memset(&recv_addr, 0, sizeof recv_addr);
+    recv_addr.sin_family = AF_INET;
+    recv_addr.sin_port = (in_port_t) htons(port);
+    recv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(udpSocket, (struct sockaddr*) &recv_addr, sizeof recv_addr) < 0) {
+        errno_abort("bind");
+    }
+
 }
 
 void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
@@ -166,47 +271,6 @@ void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) {
     close(fd);
 }
 
-void TorrentClient::serverRecv(){
-
-	char rbuf[MAX_MESSAGE_SIZE];
-    memset(rbuf, 0, MAX_MESSAGE_SIZE);
-	if (recv(udpSocket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
-        errno_abort("recv");
-    }
-	
-#ifdef DEBUG
-	printf("recv: %s\n", rbuf);
-#endif
-	char header[HEADER_SIZE];
-	char payload[MAX_SIZE_OF_PAYLOAD];
-    memset(header, 0, HEADER_SIZE);
-    memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-	snprintf(header, sizeof(header), "%s", rbuf);
-	snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
-
-	//TODO: w tym switchu w niektorych węzłach(albo i wszystkich)
-	// zamiast payloadu bedzie trzeba przekazywać dodatkowo informacje o jaki węzeł chodzi itp.
-	switch (atoi(header)) {
-		case NEW_RESOURCE_AVAILABLE:
-			handleNewResourceAvailable(payload);
-			break;
-		case OWNER_REVOKED_RESOURCE:
-            handleOwnerRevokedResource(payload);
-			break;
-		case NODE_DELETED_RESOURCE:
-			handleNodeDeletedResource(payload);
-			break;
-		case NEW_NODE_IN_NETWORK:
-			handleNewNodeInNetwork(payload);
-			break;
-	    case STATE_OF_NODE:
-	        handleStateOfNode(payload);
-	        break;
-		case NODE_LEFT_NETWORK:
-			handleNodeLeftNetwork(payload);
-			break;
-	}
-}
 
 void TorrentClient::broadcastNewNode(){
     char* buf = {};
@@ -224,24 +288,24 @@ void TorrentClient::broadcastNewFile(const ResourceInfo& resource) {
 }
 
 void TorrentClient::broadcastRevokeFile(const ResourceInfo& resource){
-	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-	snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
+    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+    snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
     genericBroadcast(OWNER_REVOKED_RESOURCE, sbuf);
 }
 
 void TorrentClient::broadcastFileDeleted(const ResourceInfo& resource){
-	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-	snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
+    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+    snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
     genericBroadcast(NODE_DELETED_RESOURCE, sbuf);
 }
 
 void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
-	std::stringstream ss;
-	for(const auto& resource: resources){
-		ss << ";" << resource.resourceName;
-	}
-	char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-	snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+    std::stringstream ss;
+    for(const auto& resource: resources){
+        ss << ";" << resource.resourceName;
+    }
+    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
     genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
 
@@ -254,6 +318,42 @@ void TorrentClient::handleNewNodeInNetwork(char *message) {}
 void TorrentClient::handleStateOfNode(char *message) {}
 void TorrentClient::handleNodeLeftNetwork(char *message) {}
 
+/**
+ *
+ * CLI BLOCK
+ *
+ */
+
+
+void TorrentClient::runCliThread() {
+    //KUBA SPARSUJ
+
+    while(keepGoing){
+        ClientCommand parsedCommand;
+        std::string filepath, resourceName;
+        switch (parsedCommand) {
+            case ADD_NEW_RESOURCE:
+                handleClientAddResource(filepath, resourceName);
+                break;
+            case LIST_AVAILABLE_RESOURCES:
+                handleClientListResources();
+                break;
+            case FIND_RESOURCE:
+                handleClientFindResource(resourceName);
+                break;
+            case DOWNLOAD_RESOURCE:
+                handleDownloadResource(resourceName);
+                break;
+            case REVOKE_RESOURCE:
+                handleRevokeResource(resourceName);
+                break;
+            case EXIT:
+                handleExit();
+                keepGoing = false;
+                break;
+        }
+    }
+}
 
 //te nowe nitki robią
 void TorrentClient::handleClientAddResource(const std::string& filepath, const std::string& resourceName) {
@@ -276,83 +376,11 @@ void TorrentClient::handleRevokeResource(const std::string& resourceName) {
 
 }
 
-void TorrentClient::handleExit() {
 
-}
 
-void TorrentClient::signalHandler() {
-    keepGoing = false;
-    handleExit();
-}
 
-void TorrentClient::initUdp() {
-    struct sockaddr_in recv_addr;
-    int trueFlag = 1;
-    if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        errno_abort("socket");
-    }
-    if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
-        errno_abort("setsockopt");
-    }
 
-    memset(&recv_addr, 0, sizeof recv_addr);
-    recv_addr.sin_family = AF_INET;
-    recv_addr.sin_port = (in_port_t) htons(port);
-    recv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(udpSocket, (struct sockaddr*) &recv_addr, sizeof recv_addr) < 0) {
-        errno_abort("bind");
-    }
-
-}
-
-void TorrentClient::handleTcpClient(int clientSocket) {
-    char rbuf[MAX_MESSAGE_SIZE];
-    memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    if (recv(tcpSocket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
-        errno_abort("recv");
-    }
-
-#ifdef DEBUG
-    printf("recv: %s\n", rbuf);
-#endif
-    char header[HEADER_SIZE];
-    char payload[MAX_SIZE_OF_PAYLOAD];
-    memset(header, 0, HEADER_SIZE);
-    memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, sizeof(header), "%s", rbuf);
-    snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
-
-    //TODO: w tym switchu w niektorych węzłach(albo i wszystkich)
-    // zamiast payloadu bedzie trzeba przekazywać dodatkowo informacje o jaki węzeł chodzi itp.
-
-//    MY_STATE_BEFORE_FILE_SENDING=141,   // tablica krotek: (resourceName, revokeHash, sizeInBytes)
-//    CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
-//    ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
-//    ERROR_WHILE_SENDING=540,            // EMPTY
-//    ERROR_WHILE_RECEIVING=541,
-
-    switch (atoi(header)) {
-        case DEMAND_CHUNK:
-            handleDemandChunk(payload);
-            break;
-        case MY_STATE_BEFORE_FILE_SENDING:
-            handleMyStateBeforeFileSending(payload);
-            break;
-        case CHUNK_TRANSFER:
-            handleChunkTransfer(payload);
-            break;
-        case ERROR_AFTER_SYNCHRONIZATION:
-            handleErrorAfterSynchronization(payload);
-            break;
-        case ERROR_WHILE_RECEIVING:
-            handleErrorWhileReceiving(payload);
-            break;
-        case ERROR_WHILE_SENDING:
-            handleErrorWhileSending(payload);
-            break;
-    }
-}
 
 
 

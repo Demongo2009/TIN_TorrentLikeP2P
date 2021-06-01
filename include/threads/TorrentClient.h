@@ -80,6 +80,25 @@ private:
     void handleNodeLeftNetwork(char *message);
 
 
+    void handleDemandChunk(char *payload);
+
+    void handleMyStateBeforeFileSending(char *payload);
+
+    void handleChunkTransfer(char *payload);
+
+    void handleErrorAfterSynchronization(char *payload);
+
+    void handleErrorWhileReceiving(char *payload);
+
+    void handleErrorWhileSending(char *payload);
+
+    void receive(int socket);
+
+    void receive(int socket, bool tcp);
+
+    void handleTcpMessage(char *header, char *payload);
+
+    void handleUdpMessage(char *header, char *payload);
 };
 
 

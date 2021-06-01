@@ -2,7 +2,6 @@
 #include <mutex>
 #include <csignal>
 #include "include/threads/TorrentClient.h"
-#include "include/structs/SharedStructs.h"
 
 
 TorrentClient t;
