@@ -28,6 +28,7 @@ private:
     std::vector<ResourceInfo> networkResources;
 //    std::vector<PeerInfo> nodes;
     std::map<std::pair<unsigned long, unsigned short>, PeerInfo> nodes_;
+    std::map<std::string , ResourceInfo> localResources_;
     std::vector<int> connectedClients;
 
     std::mutex localResourcesMutex;

@@ -8,6 +8,7 @@ struct ResourceInfo {
     unsigned int sizeInBytes;
     std::string revokeHash;
     bool isRevoked;
+    bool isThisPeerAuthor;
 };
 
 

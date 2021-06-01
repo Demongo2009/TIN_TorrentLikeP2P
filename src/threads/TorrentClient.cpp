@@ -325,7 +325,9 @@ void TorrentClient::handleNodeDeletedResource(char *message) {
 }
 
 void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) {
+    nodesMutex.lock();
     nodes_.insert(std::make_pair(std::make_pair(sockaddr.sin_addr.s_addr, sockaddr.sin_port), PeerInfo(sockaddr)));
+    nodesMutex.unlock();
     sendMyState(sockaddr);
 }
 
@@ -394,14 +396,23 @@ void TorrentClient::handleDownloadResource(const std::string& resourceName) {
 }
 
 void TorrentClient::handleRevokeResource(const std::string& resourceName) {
+    localResourcesMutex.lock();
+    if(!localResources_.at(resourceName).isThisPeerAuthor){
+        std::cout<<"YOU HAVE NO RIGHT SIR"<<std::endl;
+    }
+    localResources_.at(resourceName).isRevoked = true;
+    localResourcesMutex.unlock();
+    broadcastRevokeFile(localResources_.at(resourceName));
 
 }
 
 void TorrentClient::sendMyState(sockaddr_in newPeer) {
     std::stringstream ss;
-    for(const auto& resource: localResources){
-        ss << ";" << resource.resourceName;
+    localResourcesMutex.lock();
+    for(const auto& resource: localResources_){
+        ss << ";" << resource.first;
     }
+    localResourcesMutex.unlock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str()); //todo tu chyba trzeba w pętli bo 512 może być za mało
 
@@ -413,6 +424,7 @@ void TorrentClient::sendMyState(sockaddr_in newPeer) {
     if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
         errno_abort("send");
     }
+
 }
 
 
