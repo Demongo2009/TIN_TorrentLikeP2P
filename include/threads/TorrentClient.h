@@ -27,7 +27,7 @@ private:
 //    std::vector<ResourceInfo> localResources; //mozliwe ze bedize trzeba inna strukture zamiast generyczną
 //    std::vector<ResourceInfo> networkResources;
 //    std::vector<PeerInfo> nodes;
-    std::map<std::pair<unsigned long, unsigned short>, PeerInfo> nodes_;
+//    std::map<std::pair<unsigned long, unsigned short>, PeerInfo> nodes_;
     std::map<std::string , ResourceInfo> localResources_;
     std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources_;
     std::vector<int> connectedClients;

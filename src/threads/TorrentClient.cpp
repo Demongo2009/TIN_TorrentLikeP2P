@@ -319,29 +319,40 @@ void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
 
 //te funkcje handlujące nie tworzą nowych nitek deserializacja i aktualizacja struktur
 void TorrentClient::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
+    ResourceInfo resource = deserialize(message);
+    networkResourcesMutex.lock();
+    networkResources_[convertAddress(sockaddr)][resource.resourceName] = resource;
+    networkResourcesMutex.unlock();
 
 }
 
 void TorrentClient::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
-
+    ResourceInfo resource = deserialize(message);
+    networkResourcesMutex.lock();
+    networkResources_[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
+//    networkResources_[convertAddress(sockaddr)].erase(resource.resourceName); ???
+    networkResourcesMutex.unlock();
 }
 
 void TorrentClient::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
-
+    ResourceInfo resource = deserialize(message);
+    networkResourcesMutex.lock();
+    networkResources_[convertAddress(sockaddr)].erase(resource.resourceName);
+    networkResourcesMutex.unlock();
 }
 
 void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) {
-    nodesMutex.lock();
-    nodes_.insert(std::make_pair(std::make_pair(sockaddr.sin_addr.s_addr, sockaddr.sin_port), PeerInfo(sockaddr)));
-    nodesMutex.unlock();
+    networkResourcesMutex.lock();
+    networkResources_.insert(std::make_pair(convertAddress(sockaddr), std::map<std::string, ResourceInfo>()));
+    networkResourcesMutex.unlock();
     sendMyState(sockaddr);
 }
 
 
 
 void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
-    networkResourcesMutex.lock();
     std::vector<ResourceInfo> resources = deserialize(message);
+    networkResourcesMutex.lock();
     for(const auto & r : resources){
         networkResources_[convertAddress(sockaddr)][r.resourceName] = r;
     }
@@ -349,9 +360,9 @@ void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
 }
 
 void TorrentClient::handleNodeLeftNetwork(char *message, sockaddr_in sockaddr) {
-    nodesMutex.lock();
-    nodes_.erase(convertAddress(sockaddr));
-    nodesMutex.unlock();
+    networkResourcesMutex.lock();
+    networkResources_.erase(convertAddress(sockaddr));
+    networkResourcesMutex.unlock();
 }
 
 /**
