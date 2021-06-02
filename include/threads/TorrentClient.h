@@ -22,9 +22,9 @@ public:
 
     void signalHandler();
 private:
-    std::map<std::string , ResourceInfo> localResources_;
-    std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources_;
-    std::vector<int> connectedClients;
+    std::map<std::string , ResourceInfo> localResources;
+    std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources;
+    std::map<int, struct sockaddr_in> connectedClients;
 
     std::map<std::string, std::string> filepaths;
 
@@ -82,17 +82,6 @@ private:
     void handleNodeLeftNetwork(char *message, sockaddr_in sockaddr);
 
 
-    void handleDemandChunk(char *payload, int sockaddr);
-
-    void handleMyStateBeforeFileTransfer(char *payload, int sockaddr);
-
-    void handleChunkTransfer(char *payload, int sockaddr);
-
-    void handleErrorAfterSynchronization(char *payload, int sockaddr);
-
-    void handleErrorWhileReceiving(char *payload, int sockaddr);
-
-    void handleErrorWhileSending(char *payload, int sockaddr);
 
     void receive(int socket, bool tcp);
 
@@ -126,6 +115,18 @@ private:
     void errorWhileReceivingJob(char *payload, int sockaddr);
 
     void errorWhileSendingJob(char *payload, int sockaddr);
+
+    void sendChunks(const DemandChunkMessage &message, int socket);
+
+    void sendSync(int socket);
+
+    void sendHeader(int socket, TcpMessageCode code);
+
+    void receiveSync(int socket);
+
+    void clearPeerInfo(int socket);
+};
+
 
 
     //PUBLIC TYLKO NA POTRZEBY DEBUGOWANIA, PO TESTACH MOZNA WYWALIC

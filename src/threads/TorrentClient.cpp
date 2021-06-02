@@ -45,9 +45,8 @@ void TorrentClient::receive(int socket, bool tcp){
         exit(EXIT_FAILURE);
     }
 
-#ifdef DEBUG
     printf("recv: %s\n", rbuf);
-#endif
+
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
     memset(header, 0, HEADER_SIZE);
@@ -112,7 +111,7 @@ int TorrentClient::acceptClient() {
     else {
         std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr);
     }
-    connectedClients.emplace_back(clientSocket);
+    connectedClients.insert(std::make_pair(clientSocket, clientAddr));
     return clientSocket;
 }
 
@@ -120,47 +119,30 @@ int TorrentClient::acceptClient() {
 
     initTcp();
     while (true) {
-        receive(acceptClient(), true);
+        int socket = acceptClient();
+        std::thread tcpWorker(&TorrentClient::receive, this, socket, true);
+//        receive(socket, true);
     }
 }
 
 
 void TorrentClient::handleTcpMessage(char *header, char *payload, int socket) {
-    switch (atoi(header)) {
-        case DEMAND_CHUNK:
-            handleDemandChunk(payload, socket);
-            break;
-        case MY_STATE_BEFORE_FILE_TRANSFER:
-            handleMyStateBeforeFileTransfer(payload, socket);
-            break;
-        case CHUNK_TRANSFER:
-            handleChunkTransfer(payload, socket);
-            break;
-        case ERROR_AFTER_SYNCHRONIZATION:
-            handleErrorAfterSynchronization(payload, socket);
-            break;
-        case ERROR_WHILE_RECEIVING:
-            handleErrorWhileReceiving(payload, socket);
-            break;
-        case ERROR_WHILE_SENDING:
-            handleErrorWhileSending(payload, socket);
-            break;
+    if(atoi(header) == DEMAND_CHUNK){
+        demandChunkJob(payload, socket);
+    }else{
+        throw std::runtime_error("bad tcp header received");
     }
+
 }
 
 
-// sending convention HEADER , {';' , MESSAGE_ELEMENT};
 
-void TorrentClient::handleDemandChunk(char *payload, int socket) {
-    std::thread demandThread(&TorrentClient::demandChunkJob, this, payload, socket);
-}
-
-void TorrentClient::demandChunkJob(char *payload, int socket){
-    DemandChunkMessage message = deserializeChunkMessage(payload);
+void TorrentClient::sendChunks(const DemandChunkMessage& message, int socket){
+  
     std::string filepath = filepaths.at(message.resourceName);
     std::ifstream ifs {filepath, std::ios::in | std::ios_base::binary};
     localResourcesMutex.lock();
-    long fileSize = localResources_.at(message.resourceName).sizeInBytes;
+    long fileSize = localResources.at(message.resourceName).sizeInBytes;
     localResourcesMutex.unlock();
     char chunk[CHUNK_SIZE];
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
@@ -174,6 +156,7 @@ void TorrentClient::demandChunkJob(char *payload, int socket){
             ifs.read(chunk, fileSize - offset);
         } else {
             std::cout << "INVALID CHUNK DEMAND" << std::endl;
+            sendHeader(socket, INVALID_CHUNK_REQUEST);
         }
 
         memset(sbuf, 0, sizeof(sbuf));
@@ -183,47 +166,105 @@ void TorrentClient::demandChunkJob(char *payload, int socket){
             errno_abort("send chunk");
         }
     }
+
+}
+
+void TorrentClient::sendHeader(int socket, TcpMessageCode code){
+    char sbuf[HEADER_SIZE];
+    memset(sbuf, 0, sizeof(sbuf));
+    snprintf(sbuf, sizeof(sbuf), "%d", code);
+
+    if (send(socket, sbuf, sizeof sbuf, 0)) {
+        errno_abort("send code error");
+    }
+}
+
+void TorrentClient::sendSync(int socket){
+    std::stringstream ss;
+    localResourcesMutex.lock();
+    char payload[MAX_SIZE_OF_PAYLOAD] = {};
+    char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    for(const auto& [resourceName, resource] : localResources){
+        if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
+            snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
+            memset(sbuf, 0 , sizeof(sbuf));
+            snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
+            if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
+                errno_abort("sync");
+            }
+            ss.clear();
+        }
+        ss << ";" << resource.resourceName;
+    }
+
+    localResourcesMutex.unlock();
+    memset(sbuf, 0 , sizeof(sbuf));
+    snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
+
+    if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
+        errno_abort("sync");
+    }
+
+    sendHeader(socket, SYNC_END);
+
+}
+
+void TorrentClient::clearPeerInfo(int socket){
+    networkResourcesMutex.lock();
+    networkResources.erase(convertAddress(connectedClients.at(socket)));
+    networkResourcesMutex.unlock();
+}
+
+void TorrentClient::receiveSync(int socket){
+
+    clearPeerInfo(socket);
+    char rbuf[MAX_MESSAGE_SIZE];
+    char header[HEADER_SIZE];
+    char payload[MAX_SIZE_OF_PAYLOAD];
+    bool end = false;
+    while (!end) {
+        memset(rbuf, 0, MAX_MESSAGE_SIZE);
+        if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
+            perror("receive error");
+            exit(EXIT_FAILURE);
+        }
+
+        memset(header, 0, HEADER_SIZE);
+        snprintf(header, sizeof(header), "%s", rbuf);
+        if(atoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
+            memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
+            snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE + 1);
+            std::vector<ResourceInfo> resources = deserialize(payload);
+            networkResourcesMutex.lock();
+            for(const auto & r : resources){
+                networkResources[convertAddress(connectedClients.at(socket))][r.resourceName] = r;
+            }
+            networkResourcesMutex.unlock();
+        } else if(atoi(header) == SYNC_END){
+            end = true;
+        }else{
+            throw std::runtime_error("receive sync bad header");
+        }
+
+    }
+
+
+}
+
+void TorrentClient::demandChunkJob(char *payload, int socket){
+    sendSync(socket);
+    receiveSync(socket);
+    DemandChunkMessage message = deserialize(payload);
+    ResourceInfo resource;
+    try{
+        resource = localResources.at(message.resourceName);
+    }catch (std::out_of_range& e){
+        sendHeader(socket, INVALID_CHUNK_REQUEST);
+        close(socket);
+        return;
+    }
+    sendChunks(message, socket);
     close(socket);
-
-}
-
-void TorrentClient::handleMyStateBeforeFileTransfer(char *payload, int socket) {
-    std::thread findThread(&TorrentClient::stateBeforeFileTransferJob, this, payload, socket);
-}
-
-void TorrentClient::stateBeforeFileTransferJob(char *payload, int socket){
-
-}
-
-void TorrentClient::handleChunkTransfer(char *payload, int socket) {
-    std::thread findThread(&TorrentClient::chunkTransferJob, this, payload, socket);
-}
-
-void TorrentClient::chunkTransferJob(char *payload, int socket){
-
-}
-
-void TorrentClient::handleErrorAfterSynchronization(char *payload, int socket) { //todo z rozpędu ale pewnie bez nowych nitek te errorhandlery
-    std::thread findThread(&TorrentClient::errorAfterSyncJob, this, payload, socket);
-}
-
-void TorrentClient::errorAfterSyncJob(char *payload, int socket){
-
-}
-
-void TorrentClient::handleErrorWhileReceiving(char *payload, int socket) {
-    std::thread findThread(&TorrentClient::errorWhileReceivingJob, this, payload, socket);
-}
-
-void TorrentClient::errorWhileReceivingJob(char *payload, int socket){
-
-}
-
-void TorrentClient::handleErrorWhileSending(char *payload, int socket) {
-    std::thread findThread(&TorrentClient::errorWhileSendingJob , this, payload, socket);
-}
-
-void TorrentClient::errorWhileSendingJob(char *payload, int socket){
 
 }
 
@@ -373,7 +414,7 @@ void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
 void TorrentClient::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = deserializeResource(message);
     networkResourcesMutex.lock();
-    networkResources_[convertAddress(sockaddr)][resource.resourceName] = resource;
+    networkResources[convertAddress(sockaddr)][resource.resourceName] = resource;
     networkResourcesMutex.unlock();
 
 }
@@ -381,21 +422,21 @@ void TorrentClient::handleNewResourceAvailable(char *message, sockaddr_in sockad
 void TorrentClient::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = deserializeResource(message);
     networkResourcesMutex.lock();
-    networkResources_[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
-//    networkResources_[convertAddress(sockaddr)].erase(resource.resourceName); ???
+    networkResources[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
+//    networkResources[convertAddress(sockaddr)].erase(resource.resourceName); ???
     networkResourcesMutex.unlock();
 }
 
 void TorrentClient::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = deserializeResource(message);
     networkResourcesMutex.lock();
-    networkResources_[convertAddress(sockaddr)].erase(resource.resourceName);
+    networkResources[convertAddress(sockaddr)].erase(resource.resourceName);
     networkResourcesMutex.unlock();
 }
 
 void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) {
     networkResourcesMutex.lock();
-    networkResources_.insert(std::make_pair(convertAddress(sockaddr), std::map<std::string, ResourceInfo>()));
+    networkResources.insert(std::make_pair(convertAddress(sockaddr), std::map<std::string, ResourceInfo>()));
     networkResourcesMutex.unlock();
     sendMyState(sockaddr);
 }
@@ -406,14 +447,14 @@ void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = {};//deserialize(message);
     networkResourcesMutex.lock();
     for(const auto & r : resources){
-        networkResources_[convertAddress(sockaddr)][r.resourceName] = r;
+        networkResources[convertAddress(sockaddr)][r.resourceName] = r;
     }
     networkResourcesMutex.unlock();
 }
 
 void TorrentClient::handleNodeLeftNetwork(char *message, sockaddr_in sockaddr) {
     networkResourcesMutex.lock();
-    networkResources_.erase(convertAddress(sockaddr));
+    networkResources.erase(convertAddress(sockaddr));
     networkResourcesMutex.unlock();
 }
 
@@ -561,25 +602,51 @@ void TorrentClient::parseResourceName(std::vector<std::string> vecWord, std::str
 	}
 }
 
-//te nowe nitki robią
+
 void TorrentClient::handleClientAddResource(const std::string& resourceName, const std::string& filepath) {
 
 }
 
 void TorrentClient::handleClientListResources() {
-    std::thread findThread(&TorrentClient::listResourcesJob, this);
+    std::cout<<"LOCAL RESOURCES: "<<std::endl;
+    localResourcesMutex.lock();
+    for(const auto& it : localResources){
+        std::cout<< "NAME: "<<it.first<< " SIZE: "<<it.second.sizeInBytes<<std::endl;
+    }
+    localResourcesMutex.unlock();
+
+    std::cout<<"NETWORK RESOURCES: "<<std::endl;
+    networkResourcesMutex.lock();
+    struct in_addr addr;
+    for(const auto& [peerAddress, resources] : networkResources){
+        addr.s_addr = peerAddress.first;
+        std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
+        for(const auto& it: resources){
+            std::cout<< "NAME: "<<it.first<< " SIZE: "<<it.second.sizeInBytes<<std::endl;
+        }
+    }
+    networkResourcesMutex.unlock();
 }
 
-void TorrentClient::listResourcesJob(){
-
-}
 
 void TorrentClient::handleClientFindResource(const std::string& resourceName) {
-    std::thread findThread(&TorrentClient::findResourceJob, this, resourceName);
-}
-
-void TorrentClient::findResourceJob(const std::string& resource){
-
+    localResourcesMutex.lock();
+    auto it = localResources.find(resourceName);
+    if( it != localResources.end()){
+        std::cout<<"LOCAL RESOURCE"<< resourceName<< " PATH: " << filepaths.at(resourceName) << std::endl;
+    }
+    localResourcesMutex.unlock();
+    networkResourcesMutex.lock();
+    struct in_addr addr;
+    for(auto& [peerAddress, resources]: networkResources){
+        it = resources.find(resourceName);
+        if( it != resources.end()){
+            addr.s_addr = peerAddress.first;
+            std::cout<< "NETWORK RESOURCE OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
+            std::cout<<"NAME: "<< resourceName<< " SIZE: " << it->second.sizeInBytes << std::endl;
+        }
+    }
+    networkResourcesMutex.unlock();
 }
 
 
@@ -595,13 +662,14 @@ void TorrentClient::downloadResourceJob(const std::string& resource){
 void TorrentClient::handleRevokeResource(const std::string& resourceName, const std::string& userPassword) {
     localResourcesMutex.lock();
     std::size_t hash = std::hash<std::string>{}(userPassword);
-    if(localResources_.at(resourceName).revokeHash != hash ){
+    if(localResources.at(resourceName).revokeHash != hash ){
         std::cout<<"YOU HAVE NO RIGHT SIR"<<std::endl;
         return;
     }
-    localResources_.at(resourceName).isRevoked = true;
+//    localResources.at(resourceName).isRevoked = true;
+    localResources.erase(resourceName);
     localResourcesMutex.unlock();
-    broadcastRevokeFile(localResources_.at(resourceName));
+    broadcastRevokeFile(localResources.at(resourceName));
 
 }
 
@@ -610,7 +678,7 @@ void TorrentClient::sendMyState(sockaddr_in newPeer) {
     localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
-    for(const auto& [resourceName, resource] : localResources_){
+    for(const auto& [resourceName, resource] : localResources){
         if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));

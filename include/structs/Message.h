@@ -14,10 +14,12 @@ enum TcpMessageCode {
     DEMAND_CHUNK=140,                   // resourceName, indexOfChunk
     MY_STATE_BEFORE_FILE_TRANSFER=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
     CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
+    SYNC_END,
+    REQUEST_SYNC_END,
     ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
     ERROR_WHILE_SENDING=540,            // EMPTY
     ERROR_WHILE_RECEIVING=541,          // EMPTY
-
+    INVALID_CHUNK_REQUEST
 };
 enum UdpMessageCode {
     NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokePassword, sizeInBytes
