@@ -496,7 +496,7 @@ void TorrentClient::runCliThread() {
 		if(foundCommand){
 			switch (parsedCommand) {
 				case ADD_NEW_RESOURCE:
-					handleClientAddResource(resourceName, userString);
+					handleClientAddResource(resourceName, userString,"TEMPORARY PASSWORD");
 					break;
 				case LIST_AVAILABLE_RESOURCES:
 					handleClientListResources();
@@ -603,7 +603,7 @@ void TorrentClient::parseResourceName(std::vector<std::string> vecWord, std::str
 
 void TorrentClient::handleClientAddResource(const std::string& resourceName, const std::string& filepath,
 											const std::string& userPassword) {
-	std::ifstream f(filepath.c_str(), ios::binary | ios::ate);
+	std::ifstream f(filepath.c_str(), std::ios::binary | std::ios::ate);
 
 	if(!f.good()){
 		std::cout << "File doesnt exist in given file path!\n";
@@ -620,8 +620,7 @@ void TorrentClient::handleClientAddResource(const std::string& resourceName, con
 	localResourcesMutex.lock();
 	localResources.emplace(resourceName, resourceInfo);
 	localResourcesMutex.unlock();
-
-	filepaths.insert(resourceName, filepath);
+	filepaths.insert(std::make_pair(resourceName, filepath));
 
 	broadcastNewFile(resourceInfo);
 }
