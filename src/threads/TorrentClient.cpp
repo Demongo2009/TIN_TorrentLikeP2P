@@ -635,17 +635,17 @@ void TorrentClient::sendMyState(sockaddr_in newPeer) {
 
 std::vector<ResourceInfo> TorrentClient::deserializeVectorOfResources(char *message)
 {
-    int pointer = 0;
+    int charIndex = 0;
     std::vector<ResourceInfo> resources;
-    while (message[pointer] && pointer<=MAX_MESSAGE_SIZE)
+    while (message[charIndex] && charIndex <= MAX_MESSAGE_SIZE)
     {
-        resources.push_back(std::move(deserializeResource(message+pointer,true,&pointer)));
-        pointer++;
+        resources.push_back(std::move(deserializeResource(message + charIndex, true, &charIndex)));
+        charIndex++;
     }
 
     // troche pozno jest kiedy to pisze ale czy powinienem sprawdzac dlugosc tego, co dostaje?
 //    czy to nie jest zapewnione w zaden sposob wyzej? Jezeli tak to najmocniej przepraszam, mozna to wywalic
-    if(pointer>MAX_MESSAGE_SIZE)
+    if(charIndex > MAX_MESSAGE_SIZE)
         throw std::runtime_error("message exceeded maximum lenght!");
 
     return resources;
@@ -658,24 +658,27 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
 
     std::string builder("");
 
-    unsigned short pointer=0;
-    char currCharacter=message[pointer];
+    unsigned short charIndex=0;
+    char currCharacter=message[charIndex];
 
     while(currCharacter && currCharacter!=';'){
         resourceName+=currCharacter;
-        currCharacter=message[++pointer];
+        currCharacter=message[++charIndex];
     }
 
     //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
     if(!currCharacter)
         throw std::runtime_error("unexpected end of serialized data while reading resource name");
 
-    currCharacter=message[++pointer];
+    currCharacter=message[++charIndex];
     std::string sizeBuilder("");
 
     while(currCharacter && currCharacter!=';'){
-        sizeBuilder+=currCharacter;
-        currCharacter=message[++pointer];
+        if(isdigit(currCharacter))
+            sizeBuilder+=currCharacter;
+        else
+            throw std::runtime_error("invalid number while reading resource size (character is not a digit)");
+        currCharacter=message[++charIndex];
     }
     try {
         sizeInBytes = std::stoi(sizeBuilder);
@@ -687,25 +690,18 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
     if(!currCharacter)
         throw std::runtime_error("unexpected end of serialized data while reading resource size");
 
-    currCharacter=message[++pointer];
+    currCharacter=message[++charIndex];
     std::string revokeHashBuilder("");
 
+    //do wektora to czekamy na albo NULL albo na srednik (;)
+    while(currCharacter && currCharacter!=';'){
+        if(isdigit(currCharacter))
+            revokeHashBuilder+=currCharacter;
+        else
+            throw std::runtime_error("invalid number while reading revoking hash (character is not a digit): ");
+        currCharacter=message[++charIndex];
+    }
 
-    if(toVector){
-        //do wektora to czekamy na albo NULL albo na srednik (;)
-        while(currCharacter && currCharacter!=';'){
-            revokeHashBuilder+=currCharacter;
-            currCharacter=message[++pointer];
-        }
-    }
-    else
-    {
-        //nie do wektora to czekamy na NULL znak
-        while(currCharacter){
-            revokeHashBuilder+=currCharacter;
-            currCharacter=message[++pointer];
-        }
-    }
     try {
         revokeHash = std::stoi(revokeHashBuilder);
     }
@@ -713,9 +709,9 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
         throw std::runtime_error("exceeded number value limit or invalid character read while reading resource revoke hash");
     }
     if(toVector)
-        *dataPointer+=pointer;
+        *dataPointer+=charIndex;
 
-    if(pointer>MAX_MESSAGE_SIZE)
+    if(charIndex > MAX_MESSAGE_SIZE)
         throw std::runtime_error("message exceeded maximum lenght!");
 
     return ResourceInfo(resourceName,
@@ -728,18 +724,18 @@ DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
     std::string name("");
     std::vector<unsigned int> indices;
 
-    unsigned short pointer=0;
-    char currCharacter=message[pointer];
+    unsigned short charIndex=0;
+    char currCharacter=message[charIndex];
 
     while(currCharacter && currCharacter!=';'){
         name+=currCharacter;
-        currCharacter=message[++pointer];
+        currCharacter=message[++charIndex];
     }
     //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
     if(!currCharacter)
         throw std::runtime_error("unexpected end of serialized data while reading chunk message name");
     //przechodzimy przez srednik
-    currCharacter=message[++pointer];
+    currCharacter=message[++charIndex];
 
     std::string currentIndex("");
 
@@ -759,7 +755,7 @@ DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
             //ani nie cyfra ani nie srednik
             throw std::runtime_error("Unexpected character while reading chunk message indices");
         }
-        currCharacter=message[++pointer];
+        currCharacter=message[++charIndex];
     }
     if(!std::empty(currentIndex)){
         try {
