@@ -8,6 +8,8 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <cmath>
+#include <cassert>
 
 #include "../../include/threads/TorrentClient.h"
 
@@ -127,14 +129,35 @@ int TorrentClient::acceptClient() {
 
 
 void TorrentClient::handleTcpMessage(char *header, char *payload, int socket) {
-    if(strtol(header, nullptr, 0) == DEMAND_CHUNK){
+
+    if(std::stoi(header) == DEMAND_CHUNK){
         demandChunkJob(payload, socket);
+        receive(socket, true);
     }else{
         throw std::runtime_error("bad tcp header received");
     }
 
 }
 
+void TorrentClient::demandChunkJob(char *payload, int socket){
+    if(!connectedClients.at(socket).isSync){
+        sendSync(socket);
+        receiveSync(socket);
+        connectedClients.at(socket).isSync = true;
+    }
+    DemandChunkMessage message = deserializeChunkMessage(payload);
+    ResourceInfo resource;
+    try{
+        localResources.at(message.resourceName);
+    }catch (std::out_of_range& e){
+        sendHeader(socket, INVALID_CHUNK_REQUEST);
+        close(socket);
+        return;
+    }
+    sendChunks(message, socket);
+    close(socket);
+
+}
 
 
 void TorrentClient::sendChunks(const DemandChunkMessage& message, int socket){
@@ -199,6 +222,8 @@ void TorrentClient::sendSync(int socket){
 
     localResourcesMutex.unlock();
     memset(sbuf, 0 , sizeof(sbuf));
+    memset(payload, 0 , sizeof(payload));
+    snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
 
     if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
@@ -211,7 +236,7 @@ void TorrentClient::sendSync(int socket){
 
 void TorrentClient::clearPeerInfo(int socket){
     networkResourcesMutex.lock();
-    networkResources.erase(convertAddress(connectedClients.at(socket)));
+    networkResources.erase(convertAddress(connectedClients.at(socket).address));
     networkResourcesMutex.unlock();
 }
 
@@ -224,23 +249,23 @@ void TorrentClient::receiveSync(int socket){
     bool end = false;
     while (!end) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
-        if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
+        if (recv(socket, rbuf, sizeof(rbuf), 0) < 0) {
             perror("receive error");
             exit(EXIT_FAILURE);
         }
 
         memset(header, 0, HEADER_SIZE);
         snprintf(header, sizeof(header), "%s", rbuf);
-        if(strtol(header, nullptr, 0) == MY_STATE_BEFORE_FILE_TRANSFER) {
+        if(std::stoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
             snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE + 1);
             std::vector<ResourceInfo> resources = deserializeVectorOfResources(payload);
             networkResourcesMutex.lock();
             for(const auto & r : resources){
-                networkResources[convertAddress(connectedClients.at(socket))][r.resourceName] = r;
+                networkResources[convertAddress(connectedClients.at(socket).address)][r.resourceName] = r;
             }
             networkResourcesMutex.unlock();
-        } else if(strtol(header, nullptr, 0) == SYNC_END){
+        } else if(std::stoi(header) == SYNC_END){
             end = true;
         }else{
             throw std::runtime_error("receive sync bad header");
@@ -248,23 +273,6 @@ void TorrentClient::receiveSync(int socket){
 
     }
 
-
-}
-
-void TorrentClient::demandChunkJob(char *payload, int socket){
-    sendSync(socket);
-    receiveSync(socket);
-    DemandChunkMessage message = deserializeChunkMessage(payload);
-    ResourceInfo resource;
-    try{
-        resource = localResources.at(message.resourceName);
-    }catch (std::out_of_range& e){
-        sendHeader(socket, INVALID_CHUNK_REQUEST);
-        close(socket);
-        return;
-    }
-    sendChunks(message, socket);
-    close(socket);
 
 }
 
@@ -276,7 +284,7 @@ void TorrentClient::demandChunkJob(char *payload, int socket){
  */
 
 void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr) {
-    switch (strtol(header, nullptr, 0)) {
+    switch (std::stoi(header)) {
         case NEW_RESOURCE_AVAILABLE:
             handleNewResourceAvailable(payload, sockaddr);
             break;
@@ -355,10 +363,6 @@ void TorrentClient::genericBroadcast(UdpMessageCode code, char *payload) const {
         errno_abort("send");
     }
 
-#ifdef DEBUG
-    printf("send new node: %s\n", sbuf);
-#endif
-
 }
 
 
@@ -403,6 +407,7 @@ void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
     	}
         ss << ";" << resource.resourceName;
     }
+    memset(sbuf, 0, sizeof sbuf);
 	snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
 	genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
@@ -505,7 +510,7 @@ void TorrentClient::runCliThread() {
 					handleClientFindResource(resourceName);
 					break;
 				case DOWNLOAD_RESOURCE:
-					handleDownloadResource(resourceName);
+					handleDownloadResource(resourceName, userString);
 					break;
 				case REVOKE_RESOURCE:
 					handleRevokeResource(resourceName, userString);
@@ -668,14 +673,148 @@ void TorrentClient::handleClientFindResource(const std::string& resourceName) {
 }
 
 
-void TorrentClient::handleDownloadResource(const std::string& resourceName) {
-    std::thread findThread(&TorrentClient::downloadResourceJob, this, resourceName);
+void TorrentClient::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
+    std::thread findThread(&TorrentClient::downloadResourceJob, this, resourceName, filepath);
 }
 
-void TorrentClient::downloadResourceJob(const std::string& resource){
-
+void TorrentClient::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
+    localResourcesMutex.lock();
+    auto it = localResources.find(resourceName);
+    if( it != localResources.end()){
+        std::cout<<"ALREADY HAVE THE RESOURCE "<< resourceName<< " PATH: " << filepaths.at(resourceName) << std::endl;
+        localResourcesMutex.unlock();
+        return;
+    }
+    localResourcesMutex.unlock();
+    networkResourcesMutex.lock();
+    struct sockaddr_in addr{};
+    std::vector<struct sockaddr_in> peersPossessingResource;
+    unsigned int fileSize;
+    for(auto& [peerAddress, resources] : networkResources){
+        it = resources.find(resourceName);
+        if( it != localResources.end()){
+            addr.sin_addr.s_addr = peerAddress.first;
+            addr.sin_port = peerAddress.second;
+            addr.sin_family = AF_INET;
+            peersPossessingResource.emplace_back(addr);
+            fileSize = it->second.sizeInBytes;
+        }
+    }
+    networkResourcesMutex.unlock();
+    if(peersPossessingResource.empty()){
+        std::cout<<"NONE IS IN POSSESSION OF THIS RESOURCE "<< resourceName<< std::endl;
+        return;
+    }
+    std::vector<std::vector<int> > chunkIndices = prepareChunkIndices(peersPossessingResource.size(), fileSize);
+    assert(peersPossessingResource.size() == chunkIndices.size()); //debug
+    std::vector<std::thread> threads;
+    threads.reserve(peersPossessingResource.size());
+    for(int i = 0; i < peersPossessingResource.size(); ++i){
+        threads.emplace_back(&TorrentClient::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], filepath);
+    }
+    for(auto & thread: threads){
+        thread.join();
+    }
+    ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize);
+    localResourcesMutex.lock();
+    localResources[resourceName] = downloadedResource;
+    localResourcesMutex.unlock();
 }
 
+void TorrentClient::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string &filepath){
+
+    std::stringstream ss;
+    char payload[MAX_SIZE_OF_PAYLOAD] = {};
+    char sbuf[MAX_MESSAGE_SIZE] = {};
+    bool first = true;
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if(connect(sock, (struct sockaddr *) &sockaddr, sizeof sockaddr) < 0){
+        throw std::runtime_error("connect fail");
+    }
+    int chunksCount = 0;
+    for(const auto& index : chunksIndices){
+        if(ss.str().size() + std::to_string(index).size() > MAX_SIZE_OF_PAYLOAD){
+            memset(payload, 0 , sizeof(payload));
+            snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
+            memset(sbuf, 0 , sizeof(sbuf));
+            snprintf(sbuf, sizeof(sbuf), "%d;%s", DEMAND_CHUNK, payload);
+            if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
+                errno_abort("send");
+            }
+            ss.clear();
+            if(first){
+                receiveSync(sock);
+                sendSync(sock);
+                first = false;
+            }
+            receiveChunks(sock, chunksCount, filepath);
+            chunksCount = 0;
+        }
+        ++chunksCount;
+        ss << ";" << std::to_string(index);
+    }
+    memset(sbuf, 0 , sizeof(sbuf));
+    memset(payload, 0 , sizeof(payload));
+    snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
+    snprintf(sbuf, sizeof(sbuf), "%d;%s", DEMAND_CHUNK, payload);
+    if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
+        errno_abort("send");
+    }
+    receiveChunks(sock, chunksCount, filepath);
+    close(sock);
+}
+
+void TorrentClient::receiveChunks(int socket, int chunksCount, const std::string &filepath) {
+    char rbuf[MAX_MESSAGE_SIZE];
+    char header[HEADER_SIZE];
+    char indexBuffer[sizeof (int)];
+    char payload[MAX_SIZE_OF_PAYLOAD];
+    int index;
+    for(int i = 0; i < chunksCount; ++i) {
+        memset(rbuf, 0, MAX_MESSAGE_SIZE);
+        if (recv(socket, rbuf, sizeof(rbuf), 0) < 0) {
+            perror("receive error");
+            exit(EXIT_FAILURE);
+        }
+
+        memset(header, 0, HEADER_SIZE);
+        snprintf(header, sizeof(header), "%s", rbuf);
+        memset(indexBuffer, 0, sizeof indexBuffer);
+        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header + 1);
+        index = std::stoi(indexBuffer);
+        if (std::stoi(header) == CHUNK_TRANSFER) {
+            memset(payload, 0, CHUNK_SIZE);
+            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE + 1)*2);
+            writeFile(payload, index, filepath);
+        } else {
+            throw std::runtime_error("receive chunks bad header");
+        }
+
+    }
+}
+
+
+void TorrentClient::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
+    std::ofstream ofs (filepath, std::ofstream::out | std::ofstream::binary);
+    long offset = index * CHUNK_SIZE;
+    ofs.seekp(offset, std::ios::beg);
+    ofs<<payload;
+    ofs.close();
+}
+
+std::vector<std::vector<int> > TorrentClient::prepareChunkIndices(int peersCount, unsigned int fileSize){
+    std::vector<std::vector<int> > chunkIndices;
+    int chunks = ceil((double) fileSize / CHUNK_SIZE );
+    int chunksPerPeer = ceil((double) chunks / peersCount );
+    for(int i = 0; i < chunksPerPeer && i < chunks; ++i){
+        chunkIndices.emplace_back(std::vector<int>());
+    }
+
+    for(int i = 0; i < chunks; ++i){
+        chunkIndices[i%chunksPerPeer].emplace_back(i);
+    }
+    return chunkIndices;
+}
 
 void TorrentClient::handleRevokeResource(const std::string& resourceName, const std::string& userPassword) {
     localResourcesMutex.lock();
@@ -711,6 +850,8 @@ void TorrentClient::sendMyState(sockaddr_in newPeer) {
 
     localResourcesMutex.unlock();
     memset(sbuf, 0 , sizeof(sbuf));
+    memset(payload, 0 , sizeof(payload));
+    snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
 
     if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
@@ -854,6 +995,7 @@ DemandChunkMessage TorrentClient::deserializeChunkMessage(const char *message) {
     return DemandChunkMessage(name,
                               indices);
 }
+
 
 void errno_abort(const std::string &header){
     perror(header.c_str());

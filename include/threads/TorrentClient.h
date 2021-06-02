@@ -8,7 +8,7 @@
 
 #include "../structs/Message.h"
 #include "../structs/ResourceInfo.h"
-#include "../structs/PeerInfo.h"
+#include "../structs/ConnectedPeerInfo.h"
 
 
 class TorrentClient {
@@ -24,12 +24,13 @@ public:
 private:
     std::map<std::string , ResourceInfo> localResources;
     std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources;
-    std::map<int, struct sockaddr_in> connectedClients;
+    std::map<int, ConnectedPeerInfo> connectedClients;
 
     std::map<std::string, std::string> filepaths;
 
     std::mutex localResourcesMutex;
     std::mutex networkResourcesMutex;
+    std::mutex syncMutex;
     bool keepGoing;
     int udpSocket;
     int tcpSocket;
@@ -54,7 +55,7 @@ private:
 
     void handleClientFindResource(const std::string& resourceName);
 
-    void handleDownloadResource(const std::string& resourceName);
+    void handleDownloadResource(const std::string& resourceName, const std::string &filepath);
 
     void handleRevokeResource(const std::string& resourceName, const std::string& password);
 
@@ -93,7 +94,7 @@ private:
 
     void sendMyState(sockaddr_in in);
 
-    void downloadResourceJob(const std::string &resource);
+    void downloadResourceJob(const std::string &resource, const std::string &filepath);
 
 
     static std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
@@ -122,6 +123,15 @@ public:
     static std::vector<ResourceInfo> deserializeVectorOfResources(char *message);
 
     static DemandChunkMessage deserializeChunkMessage(const char *message);
+
+    static std::vector<std::vector<int>> prepareChunkIndices(int peersCount, unsigned int fileSize);
+
+    void downloadChunksFromPeer(sockaddr_in, const std::vector<int> &chunksIndices, const std::string &filepath);
+
+    void receiveChunks(int socket, int chunksCount, const std::string &filepath);
+
+
+    static void writeFile(const char *payload, unsigned int size, const std::string &filepath);
 };
 void errno_abort(const std::string& header);
 
