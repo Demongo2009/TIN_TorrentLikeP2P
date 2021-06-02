@@ -26,7 +26,7 @@ void TorrentClient::run() {
      */
 }
 
-void TorrentClient::handleExit() {
+void TorrentClient::handleExit() const {
     close(broadcastSocket);
 }
 
@@ -38,7 +38,7 @@ void TorrentClient::signalHandler() {
 void TorrentClient::receive(int socket, bool tcp){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    struct sockaddr_in clientAddr;
+    struct sockaddr_in clientAddr{};
     socklen_t clientLength = sizeof(sockaddr_in);
     if (recvfrom(socket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
         perror("receive error");
@@ -67,7 +67,7 @@ void TorrentClient::receive(int socket, bool tcp){
  *
  */
 void TorrentClient::initTcp(){
-    struct sockaddr_in serverAddr;
+    struct sockaddr_in serverAddr{};
 
     tcpSocket = socket(PF_INET, SOCK_STREAM, 0);
     serverAddr.sin_family = AF_INET;
@@ -97,7 +97,7 @@ void TorrentClient::initTcp(){
 
 int TorrentClient::acceptClient() {
     printf("waiting for client...\n");
-    struct sockaddr_in clientAddr;
+    struct sockaddr_in clientAddr{};
     socklen_t size = sizeof(clientAddr);
     int clientSocket = accept(tcpSocket, (struct sockaddr *) &clientAddr, &size);
     if (clientSocket == -1){
@@ -127,7 +127,7 @@ int TorrentClient::acceptClient() {
 
 
 void TorrentClient::handleTcpMessage(char *header, char *payload, int socket) {
-    if(atoi(header) == DEMAND_CHUNK){
+    if(strtol(header, nullptr, 0) == DEMAND_CHUNK){
         demandChunkJob(payload, socket);
     }else{
         throw std::runtime_error("bad tcp header received");
@@ -231,7 +231,7 @@ void TorrentClient::receiveSync(int socket){
 
         memset(header, 0, HEADER_SIZE);
         snprintf(header, sizeof(header), "%s", rbuf);
-        if(atoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
+        if(strtol(header, nullptr, 0) == MY_STATE_BEFORE_FILE_TRANSFER) {
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
             snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE + 1);
             std::vector<ResourceInfo> resources = deserializeVectorOfResources(payload);
@@ -240,7 +240,7 @@ void TorrentClient::receiveSync(int socket){
                 networkResources[convertAddress(connectedClients.at(socket))][r.resourceName] = r;
             }
             networkResourcesMutex.unlock();
-        } else if(atoi(header) == SYNC_END){
+        } else if(strtol(header, nullptr, 0) == SYNC_END){
             end = true;
         }else{
             throw std::runtime_error("receive sync bad header");
@@ -276,7 +276,7 @@ void TorrentClient::demandChunkJob(char *payload, int socket){
  */
 
 void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr) {
-    switch (atoi(header)) {
+    switch (strtol(header, nullptr, 0)) {
         case NEW_RESOURCE_AVAILABLE:
             handleNewResourceAvailable(payload, sockaddr);
             break;
@@ -287,13 +287,13 @@ void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in so
             handleNodeDeletedResource(payload, sockaddr);
             break;
         case NEW_NODE_IN_NETWORK:
-            handleNewNodeInNetwork(payload, sockaddr);
+            handleNewNodeInNetwork(sockaddr);
             break;
         case STATE_OF_NODE:
             handleStateOfNode(payload, sockaddr);
             break;
         case NODE_LEFT_NETWORK:
-            handleNodeLeftNetwork(payload, sockaddr);
+            handleNodeLeftNetwork(sockaddr);
             break;
     }
 }
@@ -307,7 +307,7 @@ void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in so
 }
 
 void TorrentClient::initUdp() {
-    struct sockaddr_in recv_addr;
+    struct sockaddr_in recv_addr{};
     int trueFlag = 1;
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
@@ -432,7 +432,7 @@ void TorrentClient::handleNodeDeletedResource(char *message, sockaddr_in sockadd
     networkResourcesMutex.unlock();
 }
 
-void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) {
+void TorrentClient::handleNewNodeInNetwork(sockaddr_in sockaddr) {
     networkResourcesMutex.lock();
     networkResources.insert(std::make_pair(convertAddress(sockaddr), std::map<std::string, ResourceInfo>()));
     networkResourcesMutex.unlock();
@@ -442,7 +442,7 @@ void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) 
 
 
 void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
-    std::vector<ResourceInfo> resources = {};//deserialize(message);
+    std::vector<ResourceInfo> resources = deserializeVectorOfResources(message);
     networkResourcesMutex.lock();
     for(const auto & r : resources){
         networkResources[convertAddress(sockaddr)][r.resourceName] = r;
@@ -450,7 +450,7 @@ void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     networkResourcesMutex.unlock();
 }
 
-void TorrentClient::handleNodeLeftNetwork(char *message, sockaddr_in sockaddr) {
+void TorrentClient::handleNodeLeftNetwork(sockaddr_in sockaddr) {
     networkResourcesMutex.lock();
     networkResources.erase(convertAddress(sockaddr));
     networkResourcesMutex.unlock();
@@ -585,7 +585,7 @@ ClientCommand TorrentClient::parseCommand(std::vector<std::string> vecWord, std:
 	return parsedCommand;
 }
 
-void TorrentClient::parseResourceName(std::vector<std::string> vecWord, std::string &resourceName, bool& foundCommand){
+void TorrentClient::parseResourceName(std::vector<std::string> vecWord, std::string &resourceName, bool& foundCommand) const{
 	if(vecWord.size() > 1){
 		resourceName = vecWord[1];
 	}else{
@@ -635,7 +635,7 @@ void TorrentClient::handleClientListResources() {
 
     std::cout<<"NETWORK RESOURCES: "<<std::endl;
     networkResourcesMutex.lock();
-    struct in_addr addr;
+    struct in_addr addr{};
     for(const auto& [peerAddress, resources] : networkResources){
         addr.s_addr = peerAddress.first;
         std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
@@ -655,7 +655,7 @@ void TorrentClient::handleClientFindResource(const std::string& resourceName) {
     }
     localResourcesMutex.unlock();
     networkResourcesMutex.lock();
-    struct in_addr addr;
+    struct in_addr addr{};
     for(auto& [peerAddress, resources]: networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
@@ -737,12 +737,12 @@ std::vector<ResourceInfo> TorrentClient::deserializeVectorOfResources(char *mess
     return resources;
 }
 
-ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int *dataPointer) {
-    std::string resourceName("");
-    unsigned int sizeInBytes=0;
-    std::size_t revokeHash=0;
+ResourceInfo TorrentClient::deserializeResource(const char *message, bool toVector,int *dataPointer) {
+    std::string resourceName;
+    unsigned int sizeInBytes;
+    std::size_t revokeHash;
 
-    std::string builder("");
+    std::string builder;
 
     unsigned short charIndex=0;
     char currCharacter=message[charIndex];
@@ -757,7 +757,7 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
         throw std::runtime_error("unexpected end of serialized data while reading resource name");
 
     currCharacter=message[++charIndex];
-    std::string sizeBuilder("");
+    std::string sizeBuilder;
 
     while(currCharacter && currCharacter!=';'){
         if(isdigit(currCharacter))
@@ -769,7 +769,7 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
     try {
         sizeInBytes = std::stoi(sizeBuilder);
     }
-    catch (std::exception exception){
+    catch (std::exception& exception){
         throw std::runtime_error("exceeded number value limit or invalid character read while reading resource size");
     }
 
@@ -777,7 +777,7 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
         throw std::runtime_error("unexpected end of serialized data while reading resource size");
 
     currCharacter=message[++charIndex];
-    std::string revokeHashBuilder("");
+    std::string revokeHashBuilder;
 
     //do wektora to czekamy na albo NULL albo na srednik (;)
     while(currCharacter && currCharacter!=';'){
@@ -791,7 +791,7 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
     try {
         revokeHash = std::stoi(revokeHashBuilder);
     }
-    catch (std::exception exception){
+    catch (std::exception& exception){
         throw std::runtime_error("exceeded number value limit or invalid character read while reading resource revoke hash");
     }
     if(toVector)
@@ -805,9 +805,9 @@ ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int
                         revokeHash);
 }
 
-DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
+DemandChunkMessage TorrentClient::deserializeChunkMessage(const char *message) {
     //zakladam, ze tutaj struktura jest "name;index1;index2;...indexn;000..."
-    std::string name("");
+    std::string name;
     std::vector<unsigned int> indices;
 
     unsigned short charIndex=0;
@@ -823,7 +823,7 @@ DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
     //przechodzimy przez srednik
     currCharacter=message[++charIndex];
 
-    std::string currentIndex("");
+    std::string currentIndex;
 
     while(currCharacter){
         if(isdigit(currCharacter)){
@@ -833,7 +833,7 @@ DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
             try {
                 indices.push_back(std::stoi(currentIndex));
             }
-            catch(std::exception exception){
+            catch(std::exception& exception){
                 throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
             }
             currentIndex="";
@@ -847,7 +847,7 @@ DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
         try {
             indices.push_back(std::stoi(currentIndex));
         }
-        catch(std::exception exception){
+        catch(std::exception& exception){
             throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
         }
     }

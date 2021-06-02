@@ -58,11 +58,11 @@ private:
 
     void handleRevokeResource(const std::string& resourceName, const std::string& password);
 
-    void handleExit();
+    void handleExit() const;
 
 	ClientCommand parseCommand(std::vector<std::string> vecWord, std::string &filepath,
 			std::string &resourceName, bool &foundCommand);
-	void parseResourceName(std::vector<std::string> vecWord, std::string &resourceName, bool& foundCommand);
+	void parseResourceName(std::vector<std::string> vecWord, std::string &resourceName, bool& foundCommand) const;
 
 
 //broadcast functions
@@ -79,7 +79,7 @@ private:
     void handleNodeDeletedResource(char *message, sockaddr_in sockaddr);
 
     void handleStateOfNode(char *message, sockaddr_in sockaddr);
-    void handleNodeLeftNetwork(char *message, sockaddr_in sockaddr);
+    void handleNodeLeftNetwork(sockaddr_in sockaddr);
 
 
 
@@ -89,15 +89,12 @@ private:
 
     void handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr);
 
-    void handleNewNodeInNetwork(char *message, sockaddr_in sockaddr);
+    void handleNewNodeInNetwork(sockaddr_in sockaddr);
 
     void sendMyState(sockaddr_in in);
 
-    void listResourcesJob();
-
     void downloadResourceJob(const std::string &resource);
 
-    void findResourceJob(const std::string &resource);
 
     static std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
         return std::make_pair(address.sin_addr.s_addr, address.sin_port);
@@ -106,21 +103,11 @@ private:
 
     void demandChunkJob(char *payload, int sockaddr);
 
-    void stateBeforeFileTransferJob(char *payload, int sockaddr);
-
-    void chunkTransferJob(char *payload, int sockaddr);
-
-    void errorAfterSyncJob(char *payload, int sockaddr);
-
-    void errorWhileReceivingJob(char *payload, int sockaddr);
-
-    void errorWhileSendingJob(char *payload, int sockaddr);
-
     void sendChunks(const DemandChunkMessage &message, int socket);
 
     void sendSync(int socket);
 
-    void sendHeader(int socket, TcpMessageCode code);
+    static void sendHeader(int socket, TcpMessageCode code);
 
     void receiveSync(int socket);
 
@@ -129,12 +116,12 @@ private:
     //PUBLIC TYLKO NA POTRZEBY DEBUGOWANIA, PO TESTACH MOZNA WYWALIC
 public:
     //deserialization
-    static ResourceInfo deserializeResource(char *message,
+    static ResourceInfo deserializeResource(const char *message,
                                             bool toVector=false,
                                             int *pointer = nullptr);
     static std::vector<ResourceInfo> deserializeVectorOfResources(char *message);
 
-    static DemandChunkMessage deserializeChunkMessage(char *message);
+    static DemandChunkMessage deserializeChunkMessage(const char *message);
 };
 void errno_abort(const std::string& header);
 
