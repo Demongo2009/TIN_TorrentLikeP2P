@@ -6,6 +6,8 @@
 #define MAX_MESSAGE_SIZE HEADER_SIZE+MAX_SIZE_OF_PAYLOAD
 #define CHUNK_SIZE MAX_SIZE_OF_PAYLOAD-3
 
+#include <vector>
+#include <string>
 
 //      NAZWA=KOD                       CO PRZESYLAMY
 enum TcpMessageCode {
@@ -47,6 +49,12 @@ enum ClientCommand {
  struct DemandChunkMessage {
     std::string resourceName;
     std::vector<unsigned int> chunkIndices;
+        //konstruktor domyslny
+    DemandChunkMessage(std::string resourceName="",
+                       std::vector<unsigned int> chunkIndices={}):
+                            resourceName(std::move(resourceName)),
+                            chunkIndices(std::move(chunkIndices)) {}
+
 };
 
 

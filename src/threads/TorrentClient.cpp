@@ -156,7 +156,7 @@ void TorrentClient::handleDemandChunk(char *payload, int socket) {
 }
 
 void TorrentClient::demandChunkJob(char *payload, int socket){
-    DemandChunkMessage message = deserialize(payload);
+    DemandChunkMessage message = deserializeChunkMessage(payload);
     std::string filepath = filepaths.at(message.resourceName);
     std::ifstream ifs {filepath, std::ios::in | std::ios_base::binary};
     localResourcesMutex.lock();
@@ -328,13 +328,15 @@ void TorrentClient::broadcastNewNode(){
     genericBroadcast(NEW_NODE_IN_NETWORK, buf);
 }
 
-void TorrentClient::broadcastNewFile(const ResourceInfo& resource) {
+void TorrentClient::broadcastNewFile(const ResourceInfo& resource)
+{
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(sbuf, sizeof(sbuf),
              "%s;%lu;%d",
              resource.resourceName.c_str(),
              resource.revokeHash,
              resource.sizeInBytes);
+
     genericBroadcast(NEW_RESOURCE_AVAILABLE, sbuf);
 }
 
@@ -369,7 +371,7 @@ void TorrentClient::broadcastLogout(const std::vector<ResourceInfo>& resources){
 
 //te funkcje handlujące nie tworzą nowych nitek deserializacja i aktualizacja struktur
 void TorrentClient::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
-    ResourceInfo resource = deserialize(message);
+    ResourceInfo resource = deserializeResource(message);
     networkResourcesMutex.lock();
     networkResources_[convertAddress(sockaddr)][resource.resourceName] = resource;
     networkResourcesMutex.unlock();
@@ -377,7 +379,7 @@ void TorrentClient::handleNewResourceAvailable(char *message, sockaddr_in sockad
 }
 
 void TorrentClient::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
-    ResourceInfo resource = deserialize(message);
+    ResourceInfo resource = deserializeResource(message);
     networkResourcesMutex.lock();
     networkResources_[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
 //    networkResources_[convertAddress(sockaddr)].erase(resource.resourceName); ???
@@ -385,7 +387,7 @@ void TorrentClient::handleOwnerRevokedResource(char *message, sockaddr_in sockad
 }
 
 void TorrentClient::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
-    ResourceInfo resource = deserialize(message);
+    ResourceInfo resource = deserializeResource(message);
     networkResourcesMutex.lock();
     networkResources_[convertAddress(sockaddr)].erase(resource.resourceName);
     networkResourcesMutex.unlock();
@@ -401,7 +403,7 @@ void TorrentClient::handleNewNodeInNetwork(char *message, sockaddr_in sockaddr) 
 
 
 void TorrentClient::handleStateOfNode(char *message, sockaddr_in sockaddr) {
-    std::vector<ResourceInfo> resources = deserialize(message);
+    std::vector<ResourceInfo> resources = {};//deserialize(message);
     networkResourcesMutex.lock();
     for(const auto & r : resources){
         networkResources_[convertAddress(sockaddr)][r.resourceName] = r;
@@ -631,12 +633,149 @@ void TorrentClient::sendMyState(sockaddr_in newPeer) {
 
 }
 
+std::vector<ResourceInfo> TorrentClient::deserializeVectorOfResources(char *message)
+{
+    int pointer = 0;
+    std::vector<ResourceInfo> resources;
+    while (message[pointer] && pointer<=MAX_MESSAGE_SIZE)
+    {
+        resources.push_back(std::move(deserializeResource(message+pointer,true,&pointer)));
+        pointer++;
+    }
+
+    // troche pozno jest kiedy to pisze ale czy powinienem sprawdzac dlugosc tego, co dostaje?
+//    czy to nie jest zapewnione w zaden sposob wyzej? Jezeli tak to najmocniej przepraszam, mozna to wywalic
+    if(pointer>MAX_MESSAGE_SIZE)
+        throw std::runtime_error("message exceeded maximum lenght!");
+
+    return resources;
+}
+
+ResourceInfo TorrentClient::deserializeResource(char *message, bool toVector,int *dataPointer) {
+    std::string resourceName("");
+    unsigned int sizeInBytes=0;
+    std::size_t revokeHash=0;
+
+    std::string builder("");
+
+    unsigned short pointer=0;
+    char currCharacter=message[pointer];
+
+    while(currCharacter && currCharacter!=';'){
+        resourceName+=currCharacter;
+        currCharacter=message[++pointer];
+    }
+
+    //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
+    if(!currCharacter)
+        throw std::runtime_error("unexpected end of serialized data while reading resource name");
+
+    currCharacter=message[++pointer];
+    std::string sizeBuilder("");
+
+    while(currCharacter && currCharacter!=';'){
+        sizeBuilder+=currCharacter;
+        currCharacter=message[++pointer];
+    }
+    try {
+        sizeInBytes = std::stoi(sizeBuilder);
+    }
+    catch (std::exception exception){
+        throw std::runtime_error("exceeded number value limit or invalid character read while reading resource size");
+    }
+
+    if(!currCharacter)
+        throw std::runtime_error("unexpected end of serialized data while reading resource size");
+
+    currCharacter=message[++pointer];
+    std::string revokeHashBuilder("");
 
 
+    if(toVector){
+        //do wektora to czekamy na albo NULL albo na srednik (;)
+        while(currCharacter && currCharacter!=';'){
+            revokeHashBuilder+=currCharacter;
+            currCharacter=message[++pointer];
+        }
+    }
+    else
+    {
+        //nie do wektora to czekamy na NULL znak
+        while(currCharacter){
+            revokeHashBuilder+=currCharacter;
+            currCharacter=message[++pointer];
+        }
+    }
+    try {
+        revokeHash = std::stoi(revokeHashBuilder);
+    }
+    catch (std::exception exception){
+        throw std::runtime_error("exceeded number value limit or invalid character read while reading resource revoke hash");
+    }
+    if(toVector)
+        *dataPointer+=pointer;
 
+    if(pointer>MAX_MESSAGE_SIZE)
+        throw std::runtime_error("message exceeded maximum lenght!");
 
+    return ResourceInfo(resourceName,
+                        sizeInBytes,
+                        revokeHash);
+}
 
+DemandChunkMessage TorrentClient::deserializeChunkMessage(char *message) {
+    //zakladam, ze tutaj struktura jest "name;index1;index2;...indexn;000..."
+    std::string name("");
+    std::vector<unsigned int> indices;
 
+    unsigned short pointer=0;
+    char currCharacter=message[pointer];
 
+    while(currCharacter && currCharacter!=';'){
+        name+=currCharacter;
+        currCharacter=message[++pointer];
+    }
+    //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
+    if(!currCharacter)
+        throw std::runtime_error("unexpected end of serialized data while reading chunk message name");
+    //przechodzimy przez srednik
+    currCharacter=message[++pointer];
+
+    std::string currentIndex("");
+
+    while(currCharacter){
+        if(isdigit(currCharacter)){
+            currentIndex+=currCharacter;
+        } else if(currCharacter==';'){
+            //mamy nowy index - wrzucamy do wektora i resetujemy stringa zbierajacego cyfry
+            try {
+                indices.push_back(std::stoi(currentIndex));
+            }
+            catch(std::exception exception){
+                throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
+            }
+            currentIndex="";
+        } else{
+            //ani nie cyfra ani nie srednik
+            throw std::runtime_error("Unexpected character while reading chunk message indices");
+        }
+        currCharacter=message[++pointer];
+    }
+    if(!std::empty(currentIndex)){
+        try {
+            indices.push_back(std::stoi(currentIndex));
+        }
+        catch(std::exception exception){
+            throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
+        }
+    }
+    return DemandChunkMessage(name,
+                              indices);
+}
+
+void errno_abort(const std::string &header){
+    perror(header.c_str());
+    exit(EXIT_FAILURE);
+}
 
 
