@@ -125,9 +125,6 @@ private:
     void receiveSync(int socket);
 
     void clearPeerInfo(int socket);
-};
-
-
 
     //PUBLIC TYLKO NA POTRZEBY DEBUGOWANIA, PO TESTACH MOZNA WYWALIC
 public:

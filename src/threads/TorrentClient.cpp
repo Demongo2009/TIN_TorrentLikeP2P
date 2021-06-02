@@ -234,7 +234,7 @@ void TorrentClient::receiveSync(int socket){
         if(atoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
             snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE + 1);
-            std::vector<ResourceInfo> resources = deserialize(payload);
+            std::vector<ResourceInfo> resources = deserializeVectorOfResources(payload);
             networkResourcesMutex.lock();
             for(const auto & r : resources){
                 networkResources[convertAddress(connectedClients.at(socket))][r.resourceName] = r;
@@ -254,7 +254,7 @@ void TorrentClient::receiveSync(int socket){
 void TorrentClient::demandChunkJob(char *payload, int socket){
     sendSync(socket);
     receiveSync(socket);
-    DemandChunkMessage message = deserialize(payload);
+    DemandChunkMessage message = deserializeChunkMessage(payload);
     ResourceInfo resource;
     try{
         resource = localResources.at(message.resourceName);
@@ -297,8 +297,6 @@ void TorrentClient::handleUdpMessage(char *header, char *payload, sockaddr_in so
             break;
     }
 }
-
-
 
 [[noreturn]] void TorrentClient::runUdpServerThread() {
     initUdp();
