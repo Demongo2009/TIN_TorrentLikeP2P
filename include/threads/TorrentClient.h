@@ -4,7 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <map>
-#include <bits/socket.h>
+#include <sys/socket.h>
 
 #include "../structs/Message.h"
 #include "../structs/ResourceInfo.h"
@@ -18,6 +18,7 @@ public:
     }
 
     void run();
+    void debug(ResourceInfo&);
 
     void signalHandler();
 private:
@@ -84,7 +85,6 @@ private:
 
     void receive(int socket, bool tcp);
 
-
     void handleTcpMessage(char *header, char *payload, int socket);
 
     void handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr);
@@ -103,6 +103,7 @@ private:
         return std::make_pair(address.sin_addr.s_addr, address.sin_port);
     }
 
+
     void demandChunkJob(char *payload, int sockaddr);
 
     void stateBeforeFileTransferJob(char *payload, int sockaddr);
@@ -115,7 +116,6 @@ private:
 
     void errorWhileSendingJob(char *payload, int sockaddr);
 
-
     void sendChunks(const DemandChunkMessage &message, int socket);
 
     void sendSync(int socket);
@@ -127,9 +127,18 @@ private:
     void clearPeerInfo(int socket);
 };
 
-void errno_abort(const std::string& header){
-    perror(header.c_str());
-    exit(EXIT_FAILURE);
-}
+
+
+    //PUBLIC TYLKO NA POTRZEBY DEBUGOWANIA, PO TESTACH MOZNA WYWALIC
+public:
+    //deserialization
+    static ResourceInfo deserializeResource(char *message,
+                                            bool toVector=false,
+                                            int *pointer = nullptr);
+    static std::vector<ResourceInfo> deserializeVectorOfResources(char *message);
+
+    static DemandChunkMessage deserializeChunkMessage(char *message);
+};
+void errno_abort(const std::string& header);
 
 #endif //TIN_TORRENTLIKEP2P_TORRENTCLIENT_H
