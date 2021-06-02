@@ -601,8 +601,29 @@ void TorrentClient::parseResourceName(std::vector<std::string> vecWord, std::str
 }
 
 
-void TorrentClient::handleClientAddResource(const std::string& resourceName, const std::string& filepath) {
+void TorrentClient::handleClientAddResource(const std::string& resourceName, const std::string& filepath,
+											const std::string& userPassword) {
+	std::ifstream f(filepath.c_str(), ios::binary | ios::ate);
 
+	if(!f.good()){
+		std::cout << "File doesnt exist in given file path!\n";
+		return;
+	}
+
+	struct ResourceInfo resourceInfo;
+
+	resourceInfo.resourceName = resourceName;
+	resourceInfo.sizeInBytes = f.tellg();
+	resourceInfo.revokeHash = std::hash<std::string >{}(userPassword);
+	resourceInfo.isRevoked = false;
+
+	localResourcesMutex.lock();
+	localResources.emplace(resourceName, resourceInfo);
+	localResourcesMutex.unlock();
+
+	filepaths.insert(resourceName, filepath);
+
+	broadcastNewFile(resourceInfo);
 }
 
 void TorrentClient::handleClientListResources() {

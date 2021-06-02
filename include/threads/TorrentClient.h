@@ -48,15 +48,15 @@ private:
     [[noreturn]] void runUdpServerThread();
     void runCliThread();
 
-    void handleClientAddResource(const std::string& basicString, const std::string& basicString1);
+    void handleClientAddResource(const std::string& resourceName, const std::string& resourcePath, const std::string& userPassword);
 
     void handleClientListResources();
 
-    void handleClientFindResource(const std::string& basicString);
+    void handleClientFindResource(const std::string& resourceName);
 
-    void handleDownloadResource(const std::string& basicString);
+    void handleDownloadResource(const std::string& resourceName);
 
-    void handleRevokeResource(const std::string& basicString, const std::string& password);
+    void handleRevokeResource(const std::string& resourceName, const std::string& password);
 
     void handleExit();
 
