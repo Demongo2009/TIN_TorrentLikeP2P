@@ -1,10 +1,9 @@
 #include <memory>
-#include <mutex>
 #include <csignal>
 #include "include/threads/TorrentClient.h"
 
-
-TorrentClient t;
+SharedStructs structs;
+TorrentClient t = TorrentClient(structs);
 
 void signalHandler(int signum){
     t.signalHandler();

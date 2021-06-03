@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <string>
+#include <stdexcept>
 
 //      NAZWA=KOD                       CO PRZESYLAMY
 enum TcpMessageCode {
@@ -56,6 +57,56 @@ enum ClientCommand {
                        std::vector<unsigned int> chunkIndices={}):
                             resourceName(std::move(resourceName)),
                             chunkIndices(std::move(chunkIndices)) {}
+
+     static DemandChunkMessage deserializeChunkMessage(const char *message) {
+         //zakladam, ze tutaj struktura jest "name;index1;index2;...indexn;000..."
+         std::string name;
+         std::vector<unsigned int> indices;
+
+         unsigned short charIndex=0;
+         char currCharacter=message[charIndex];
+
+         while(currCharacter && currCharacter!=';'){
+             name+=currCharacter;
+             currCharacter=message[++charIndex];
+         }
+         //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
+         if(!currCharacter)
+             throw std::runtime_error("unexpected end of serialized data while reading chunk message name");
+         //przechodzimy przez srednik
+         currCharacter=message[++charIndex];
+
+         std::string currentIndex;
+
+         while(currCharacter){
+             if(isdigit(currCharacter)){
+                 currentIndex+=currCharacter;
+             } else if(currCharacter==';'){
+                 //mamy nowy index - wrzucamy do wektora i resetujemy stringa zbierajacego cyfry
+                 try {
+                     indices.push_back(std::stoi(currentIndex));
+                 }
+                 catch(std::exception& exception){
+                     throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
+                 }
+                 currentIndex="";
+             } else{
+                 //ani nie cyfra ani nie srednik
+                 throw std::runtime_error("Unexpected character while reading chunk message indices");
+             }
+             currCharacter=message[++charIndex];
+         }
+         if(!std::empty(currentIndex)){
+             try {
+                 indices.push_back(std::stoi(currentIndex));
+             }
+             catch(std::exception& exception){
+                 throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
+             }
+         }
+         return DemandChunkMessage(name,
+                                   indices);
+     }
 
 };
 
