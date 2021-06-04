@@ -47,10 +47,12 @@ void TcpThread::initTcp(){
 
 void TcpThread::terminate(){
     keepGoing = false;
+    shutdown(tcpSocket, SHUT_RDWR);
     close(tcpSocket);
     for(auto& it: connectedClients){
         close(it.first);
     }
+    std::terminate();
 }
 
 int TcpThread::acceptClient() {
@@ -58,6 +60,8 @@ int TcpThread::acceptClient() {
     struct sockaddr_in clientAddr{};
     socklen_t size = sizeof(clientAddr);
     int clientSocket = accept(tcpSocket, (struct sockaddr *) &clientAddr, &size);
+
+    printf("ACCEPTED...\n");
     if (clientSocket == -1){
         printf("ACCEPT ERROR: %s\n", strerror(errno));
         return -1;
@@ -101,6 +105,7 @@ void TcpThread::runTcpServerThread() {
 
     initTcp();
     while (keepGoing) {
+        std::cout<<"TCP"<<std::endl;
         int socket = acceptClient();
         if(socket > 0)
             std::thread tcpWorker(&TcpThread::receive, this, socket);

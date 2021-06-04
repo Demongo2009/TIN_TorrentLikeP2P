@@ -30,7 +30,8 @@ private:
     SharedStructs& sharedStructs;
     int udpSocket;
     const int port = 5555;
-    const std::string address = "127.0.0.1";
+    const std::string myAddress = "127.0.0.1";
+    struct sockaddr_in recv_addr;
     bool keepGoing;
     struct sockaddr_in broadcastAddress;
     int broadcastSocket;
@@ -38,7 +39,7 @@ private:
     void receive();
     void initUdp();
     //broadcast functions
-    void genericBroadcast(UdpMessageCode code, char* payload) const;
+    void genericBroadcast(UdpMessageCode code, const char* payload) const;
     void broadcastNewNode();
 
     void broadcastFileDeleted(const ResourceInfo& resource);

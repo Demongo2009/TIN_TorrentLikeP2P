@@ -32,7 +32,7 @@ void CliThread::runCliThread() {
     while(keepGoing){
         ClientCommand parsedCommand;
         std::string userString, resourceName;
-
+        std::cout<<"CLI"<<std::endl;
         ss << line;
         for(std::string s; ss >>s;){
             vecWord.push_back(s);
@@ -80,6 +80,7 @@ void CliThread::terminate(){
     for(auto & it: ongoingDowloadingFilepaths){
         remove(it.c_str());
     }
+    std::cout<<"CLITERM"<<std::endl;
     keepGoing = false;
 }
 

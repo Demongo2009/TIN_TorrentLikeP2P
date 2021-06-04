@@ -49,6 +49,7 @@ void UdpThread::runUdpServerThread() {
 
 void UdpThread::terminate(){
     keepGoing = false;
+    std::cout<<"UDPTERM"<<std::endl;
     broadcastLogout();
     close(udpSocket);
 }
@@ -71,13 +72,14 @@ void UdpThread::receive(){
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
     snprintf(header, sizeof(header), "%s", rbuf);
     snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
-
-    handleUdpMessage(header, payload, clientAddr);
+    if(!(inet_ntoa(clientAddr.sin_addr) == myAddress)){
+        handleUdpMessage(header, payload, clientAddr);
+    }
 
 }
 
 void UdpThread::initUdp() {
-    struct sockaddr_in recv_addr{};
+
     int trueFlag = 1;
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
@@ -112,15 +114,13 @@ void UdpThread::initUdp() {
 
 }
 
-void UdpThread::genericBroadcast(UdpMessageCode code, char *payload) const {
-
+void UdpThread::genericBroadcast(UdpMessageCode code, const char *payload) const {
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
     if( strlen(payload) > MAX_SIZE_OF_PAYLOAD ){
         std::cout << "The payload is too big!\n";
         return;
     }
     snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
-
     if (sendto(broadcastSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &broadcastAddress, sizeof broadcastAddress) < 0) {
         errno_abort("send");
     }
@@ -129,8 +129,8 @@ void UdpThread::genericBroadcast(UdpMessageCode code, char *payload) const {
 
 
 void UdpThread::broadcastNewNode(){
-    char* buf = {};
-    genericBroadcast(NEW_NODE_IN_NETWORK, buf);
+    std::string buf;
+    genericBroadcast(NEW_NODE_IN_NETWORK, buf.c_str());
 }
 
 void UdpThread::broadcastNewFile(const ResourceInfo& resource)
@@ -171,8 +171,8 @@ void UdpThread::broadcastLogout(){
 //    }
 //    memset(sbuf, 0, sizeof sbuf);
 //    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
-    char* sbuf = {};
-    genericBroadcast(NODE_LEFT_NETWORK, sbuf);
+    std::string buf;
+    genericBroadcast(NODE_LEFT_NETWORK, buf.c_str());
 }
 
 

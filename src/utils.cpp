@@ -5,7 +5,7 @@
 #include "../include/utils.h"
 void errno_abort(const std::string &header){
     perror(header.c_str());
-    exit(EXIT_FAILURE);
+//    exit(EXIT_FAILURE);
 }
 
 std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
