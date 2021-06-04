@@ -7,7 +7,7 @@
 
 class TorrentClient {
 public:
-    explicit TorrentClient(SharedStructs& structs):{
+    explicit TorrentClient(SharedStructs& structs){
     	tcpObj = new TcpThread(structs);
     	udpObj = new UdpThread(structs),
     	cliObj = new CliThread(structs, tcpObj, udpObj);
