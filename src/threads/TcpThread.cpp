@@ -43,6 +43,8 @@ void TcpThread::initTcp(){
         exit(1);
     }
     std::cout<<"Listening"<<std::endl;
+
+	pthread_barrier_wait(barrier);
 }
 
 void TcpThread::terminate(){
@@ -271,4 +273,8 @@ void TcpThread::receiveSync(int socket){
     }
 
 
+}
+
+void TcpThread::setBarrier(pthread_barrier_t *ptr) {
+	barrier = ptr;
 }

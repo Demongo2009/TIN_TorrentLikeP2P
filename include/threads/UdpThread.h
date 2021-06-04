@@ -19,13 +19,19 @@ class UdpThread{
 public:
     UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
 
-
+	static void start(UdpThread* udpObj){
+    	udpObj->runUdpServerThread();
+    }
     void runUdpServerThread();
 
     void broadcastNewFile(const ResourceInfo& resource);
 
     void broadcastRevokeFile(const ResourceInfo& resource);
     void terminate();
+
+	void setBarrier(pthread_barrier_t *ptr);
+	void initUdp();
+
 private:
     SharedStructs& sharedStructs;
     int udpSocket;
@@ -35,9 +41,9 @@ private:
     bool keepGoing;
     struct sockaddr_in broadcastAddress;
     int broadcastSocket;
+    pthread_barrier_t* barrier;
 
     void receive();
-    void initUdp();
     //broadcast functions
     void genericBroadcast(UdpMessageCode code, const char* payload) const;
     void broadcastNewNode();

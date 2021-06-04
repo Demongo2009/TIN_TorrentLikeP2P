@@ -17,21 +17,29 @@ class CliThread{
 
 public:
 
-    CliThread(SharedStructs& structs, TcpThread& tcpThread, UdpThread& udpThread) : sharedStructs(structs), tcpObj(tcpThread),
+    CliThread(SharedStructs& structs, TcpThread* tcpThread, UdpThread* udpThread) : sharedStructs(structs), tcpObj(tcpThread),
                                                                                     udpObj(udpThread){
         keepGoing = true;
     }
 
+	static void start(CliThread* cliObj){
+    	cliObj->runCliThread();
+    }
+
     void runCliThread();
     void terminate();
+
+	void setBarrier(pthread_barrier_t *ptr);
+
 private:
     SharedStructs& sharedStructs;
-    TcpThread tcpObj;
-    UdpThread udpObj;
+    TcpThread* tcpObj;
+    UdpThread* udpObj;
     std::set<int> openSockets;
     std::set<std::string> ongoingDowloadingFilepaths;
     bool keepGoing;
     const int MAX_FILE_NAME_SIZE = 256;
+    pthread_barrier_t* barrier;
 
 
 

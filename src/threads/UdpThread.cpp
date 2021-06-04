@@ -41,6 +41,7 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
 
 void UdpThread::runUdpServerThread() {
     initUdp();
+	pthread_barrier_wait(barrier);
     broadcastNewNode();
     while (keepGoing){
         receive();
@@ -110,7 +111,7 @@ void UdpThread::initUdp() {
     broadcastAddress.sin_family = AF_INET;
     broadcastAddress.sin_port = (in_port_t) htons(port);
     // broadcasting address for unix (?)
-    inet_aton("127.255.255.255", &broadcastAddress.sin_addr);
+    inet_aton("255.255.255.255", &broadcastAddress.sin_addr);
 
 }
 
@@ -121,6 +122,9 @@ void UdpThread::genericBroadcast(UdpMessageCode code, const char *payload) const
         return;
     }
     snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
+    if(broadcastSocket == 0){
+    	std::cout<<"!\n";
+    }
     if (sendto(broadcastSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &broadcastAddress, sizeof broadcastAddress) < 0) {
         errno_abort("send");
     }
@@ -252,4 +256,8 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
         errno_abort("send");
     }
 
+}
+
+void UdpThread::setBarrier(pthread_barrier_t *ptr) {
+	barrier = ptr;
 }

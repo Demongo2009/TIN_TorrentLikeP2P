@@ -3,16 +3,25 @@
 #include <sstream>
 #include <fstream>
 #include "../../include/threads/TorrentClient.h"
+#include <pthread.h>
 
 void TorrentClient::run() {
 
-    std::thread udpThread = std::thread(&UdpThread::runUdpServerThread, udpObj);
-    std::thread tcpThread = std::thread(&TcpThread::runTcpServerThread, tcpObj);
-    std::thread cliThread = std::thread(&CliThread::runCliThread, cliObj);
+	pthread_barrier_t barrier;
+	const pthread_barrierattr_t *barrierattr;
+	int success = pthread_barrier_init(&barrier, nullptr,3);
+	udpObj->setBarrier(&barrier);
+	tcpObj->setBarrier(&barrier);
+	cliObj->setBarrier(&barrier);
+
+
+    std::thread udpThread(UdpThread::start, udpObj);
+    std::thread tcpThread(TcpThread::start, tcpObj);
+    std::thread cliThread(CliThread::start, cliObj);
 
     cliThread.join();
-    tcpObj.terminate();
-    udpObj.terminate();
+    tcpObj->terminate();
+    udpObj->terminate();
     /**
      * 1.init struktur
      * 2.pthread_create(runServerThread)
@@ -22,9 +31,9 @@ void TorrentClient::run() {
 }
 
 void TorrentClient::signalHandler() {
-    cliObj.terminate();
-    tcpObj.terminate();
-    udpObj.terminate();
+    cliObj->terminate();
+    tcpObj->terminate();
+    udpObj->terminate();
 }
 
 

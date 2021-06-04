@@ -19,12 +19,20 @@ class TcpThread{
 
 public:
     TcpThread(SharedStructs& structs) : sharedStructs(structs){ keepGoing = true; }
+
+    static void start(TcpThread* tcpObj){
+    	tcpObj->runTcpServerThread();
+    }
     void runTcpServerThread();
 
     void receiveSync(int socket);
 
     void sendSync(int socket);
     void terminate();
+
+	void setBarrier(pthread_barrier_t *ptr);
+	void initTcp();
+
 private:
     bool keepGoing;
     SharedStructs& sharedStructs;
@@ -32,11 +40,10 @@ private:
     const int port = 5555;
     const std::string address = "127.0.0.1";
     std::map<int, ConnectedPeerInfo> connectedClients;
+	pthread_barrier_t* barrier;
 
 
 
-
-    void initTcp();
     int acceptClient();
 
     void receive(int socket);

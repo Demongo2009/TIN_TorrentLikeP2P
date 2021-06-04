@@ -14,7 +14,7 @@
 #include "../../include/threads/CliThread.h"
 
 void CliThread::runCliThread() {
-
+	pthread_barrier_wait(barrier);
     std::stringstream ss;
     std::string line;
     std::string prompt = "\nPlease input command:\n"
@@ -180,7 +180,7 @@ void CliThread::handleClientAddResource(const std::string& resourceName, const s
     sharedStructs.localResourcesMutex.unlock();
     sharedStructs.filepaths.insert(std::make_pair(resourceName, filepath));
 
-    udpObj.broadcastNewFile(resourceInfo);
+    udpObj->broadcastNewFile(resourceInfo);
 }
 
 void CliThread::handleClientListResources() {
@@ -274,7 +274,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
     sharedStructs.localResourcesMutex.unlock();
-    udpObj.broadcastNewFile(downloadedResource);
+    udpObj->broadcastNewFile(downloadedResource);
 }
 
 void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string &filepath){
@@ -300,8 +300,8 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             }
             ss.clear();
             if(first){
-                tcpObj.receiveSync(sock);
-                tcpObj.sendSync(sock);
+                tcpObj->receiveSync(sock);
+                tcpObj->sendSync(sock);
                 first = false;
             }
             receiveChunks(sock, chunksCount, filepath);
@@ -385,6 +385,10 @@ void CliThread::handleRevokeResource(const std::string& resourceName, const std:
 //    localResources.at(resourceName).isRevoked = true;
     sharedStructs.localResources.erase(resourceName);
     sharedStructs.localResourcesMutex.unlock();
-    udpObj.broadcastRevokeFile(sharedStructs.localResources.at(resourceName));
+    udpObj->broadcastRevokeFile(sharedStructs.localResources.at(resourceName));
 
+}
+
+void CliThread::setBarrier(pthread_barrier_t *ptr) {
+	barrier = ptr;
 }
