@@ -5,6 +5,8 @@
 #ifndef TIN_TORRENTLIKEP2P_CLITHREAD_H
 #define TIN_TORRENTLIKEP2P_CLITHREAD_H
 
+#include <thread>
+#include <set>
 #include "../structs/Message.h"
 #include "../structs/SharedStructs.h"
 #include "TcpThread.h"
@@ -26,6 +28,8 @@ private:
     SharedStructs& sharedStructs;
     TcpThread tcpObj;
     UdpThread udpObj;
+    std::set<int> openSockets;
+    std::set<std::string> ongoingDowloadingFilepaths;
     bool keepGoing;
     const int MAX_FILE_NAME_SIZE = 256;
 
@@ -51,7 +55,7 @@ private:
 
     void downloadChunksFromPeer(sockaddr_in, const std::vector<int> &chunksIndices, const std::string &filepath);
 
-    void receiveChunks(int socket, int chunksCount, const std::string &filepath);
+    void receiveChunks(int sock, int chunksCount, const std::string &filepath);
 
 
     static void writeFile(const char *payload, unsigned int size, const std::string &filepath);

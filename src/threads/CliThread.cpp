@@ -74,7 +74,13 @@ void CliThread::runCliThread() {
 }
 
 void CliThread::terminate(){
-
+    for(auto& it: openSockets){
+        close(it);
+    }
+    for(auto & it: ongoingDowloadingFilepaths){
+        remove(it.c_str());
+    }
+    keepGoing = false;
 }
 
 ClientCommand CliThread::parseCommand(std::vector<std::string> vecWord, std::string &filepath,
@@ -220,7 +226,7 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
 
 
 void CliThread::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
-    std::thread findThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
+    std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
@@ -255,16 +261,19 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     assert(peersPossessingResource.size() == chunkIndices.size()); //debug
     std::vector<std::thread> threads;
     threads.reserve(peersPossessingResource.size());
+    ongoingDowloadingFilepaths.insert(filepath);
     for(int i = 0; i < peersPossessingResource.size(); ++i){
         threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], filepath);
     }
     for(auto & thread: threads){
         thread.join();
     }
+    ongoingDowloadingFilepaths.erase(filepath);
     ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize);
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
     sharedStructs.localResourcesMutex.unlock();
+    udpObj.broadcastNewFile(downloadedResource);
 }
 
 void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string &filepath){
@@ -277,6 +286,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     if(connect(sock, (struct sockaddr *) &sockaddr, sizeof sockaddr) < 0){
         throw std::runtime_error("connect fail");
     }
+    openSockets.insert(sock);
     int chunksCount = 0;
     for(const auto& index : chunksIndices){
         if(ss.str().size() + std::to_string(index).size() > MAX_SIZE_OF_PAYLOAD){
@@ -308,9 +318,10 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     }
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
+    openSockets.erase(sock);
 }
 
-void CliThread::receiveChunks(int socket, int chunksCount, const std::string &filepath) {
+void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
     char header[HEADER_SIZE];
     char indexBuffer[sizeof (int)];
@@ -318,7 +329,7 @@ void CliThread::receiveChunks(int socket, int chunksCount, const std::string &fi
     int index;
     for(int i = 0; i < chunksCount; ++i) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
-        if (recv(socket, rbuf, sizeof(rbuf), 0) < 0) {
+        if (recv(sock, rbuf, sizeof(rbuf), 0) < 0) {
             perror("receive error");
             exit(EXIT_FAILURE);
         }
@@ -333,6 +344,7 @@ void CliThread::receiveChunks(int socket, int chunksCount, const std::string &fi
             snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE + 1)*2);
             writeFile(payload, index, filepath);
         } else {
+            //invalid chunk request
             throw std::runtime_error("receive chunks bad header");
         }
 

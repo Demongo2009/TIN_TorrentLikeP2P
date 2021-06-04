@@ -18,15 +18,15 @@
 class TcpThread{
 
 public:
-    TcpThread(SharedStructs& structs) : sharedStructs(structs){}
-    [[noreturn]] void runTcpServerThread();
+    TcpThread(SharedStructs& structs) : sharedStructs(structs){ keepGoing = true; }
+    void runTcpServerThread();
 
     void receiveSync(int socket);
 
     void sendSync(int socket);
     void terminate();
 private:
-
+    bool keepGoing;
     SharedStructs& sharedStructs;
     int tcpSocket;
     const int port = 5555;
@@ -53,6 +53,7 @@ private:
     static void sendHeader(int socket, TcpMessageCode code);
 
     void clearPeerInfo(int socket);
+    bool validateChunkDemand(const DemandChunkMessage& message);
 
 };
 

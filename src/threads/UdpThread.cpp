@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <iostream>
+#include <unistd.h>
 #include <string>
 #include <sstream>
 #include <fstream>
@@ -38,16 +39,18 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
     }
 }
 
-[[noreturn]] void UdpThread::runUdpServerThread() {
+void UdpThread::runUdpServerThread() {
     initUdp();
     broadcastNewNode();
-    while (true){
+    while (keepGoing){
         receive();
     }
 }
 
 void UdpThread::terminate(){
-
+    keepGoing = false;
+    broadcastLogout();
+    close(udpSocket);
 }
 
 void UdpThread::receive(){
@@ -154,20 +157,21 @@ void UdpThread::broadcastFileDeleted(const ResourceInfo& resource){
     genericBroadcast(NODE_DELETED_RESOURCE, sbuf);
 }
 
-void UdpThread::broadcastLogout(const std::vector<ResourceInfo>& resources){
-    std::stringstream ss;
-    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-
-    for(const auto& resource: resources){
-        if(ss.str().size() + resource.resourceName.size() > MAX_SIZE_OF_PAYLOAD){ //todo chyba niepotrzebne to wysyłać
-            snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
-            genericBroadcast(NODE_LEFT_NETWORK, sbuf);
-            ss.clear();
-        }
-        ss << ";" << resource.resourceName;
-    }
-    memset(sbuf, 0, sizeof sbuf);
-    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+void UdpThread::broadcastLogout(){
+//    std::stringstream ss;
+//    char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
+//
+//    for(const auto& resource: resources){
+//        if(ss.str().size() + resource.resourceName.size() > MAX_SIZE_OF_PAYLOAD){ //todo chyba niepotrzebne to wysyłać
+//            snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+//            genericBroadcast(NODE_LEFT_NETWORK, sbuf);
+//            ss.clear();
+//        }
+//        ss << ";" << resource.resourceName;
+//    }
+//    memset(sbuf, 0, sizeof sbuf);
+//    snprintf(sbuf, sizeof(sbuf), "%s", ss.str().c_str());
+    char* sbuf = {};
     genericBroadcast(NODE_LEFT_NETWORK, sbuf);
 }
 
@@ -184,8 +188,8 @@ void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) 
 void UdpThread::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
-//    networkResources[convertAddress(sockaddr)].erase(resource.resourceName); ???
+//    sharedStructs.networkResources[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
+    sharedStructs.networkResources[convertAddress(sockaddr)].erase(resource.resourceName);
     sharedStructs.networkResourcesMutex.unlock();
 }
 

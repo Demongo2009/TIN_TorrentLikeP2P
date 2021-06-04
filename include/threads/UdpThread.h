@@ -17,10 +17,10 @@
 
 class UdpThread{
 public:
-    UdpThread(SharedStructs& structs) : sharedStructs(structs){}
+    UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
 
 
-    [[noreturn]] void runUdpServerThread();
+    void runUdpServerThread();
 
     void broadcastNewFile(const ResourceInfo& resource);
 
@@ -31,6 +31,7 @@ private:
     int udpSocket;
     const int port = 5555;
     const std::string address = "127.0.0.1";
+    bool keepGoing;
     struct sockaddr_in broadcastAddress;
     int broadcastSocket;
 
@@ -41,7 +42,7 @@ private:
     void broadcastNewNode();
 
     void broadcastFileDeleted(const ResourceInfo& resource);
-    void broadcastLogout(const std::vector<ResourceInfo>& resources);
+    void broadcastLogout();
 
 //functions handling broadcasted messages - UDP server
     void handleNewResourceAvailable(char *message, sockaddr_in sockaddr);

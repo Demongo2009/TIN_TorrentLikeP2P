@@ -46,7 +46,11 @@ void TcpThread::initTcp(){
 }
 
 void TcpThread::terminate(){
-
+    keepGoing = false;
+    close(tcpSocket);
+    for(auto& it: connectedClients){
+        close(it.first);
+    }
 }
 
 int TcpThread::acceptClient() {
@@ -56,6 +60,7 @@ int TcpThread::acceptClient() {
     int clientSocket = accept(tcpSocket, (struct sockaddr *) &clientAddr, &size);
     if (clientSocket == -1){
         printf("ACCEPT ERROR: %s\n", strerror(errno));
+        return -1;
     }
 
     int currentReturnCode = getpeername(clientSocket, (struct sockaddr *) &clientAddr, &size);
@@ -72,11 +77,11 @@ int TcpThread::acceptClient() {
 void TcpThread::receive(int socket){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    struct sockaddr_in clientAddr{};
-    socklen_t clientLength = sizeof(sockaddr_in);
-    if (recvfrom(socket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
+    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
         perror("receive error");
-        exit(EXIT_FAILURE);
+        if(connectedClients.find(socket)!= connectedClients.end())
+            connectedClients.erase(socket);
+        return;
     }
 
     printf("recv: %s\n", rbuf);
@@ -92,12 +97,13 @@ void TcpThread::receive(int socket){
 
 }
 
-[[noreturn]] void TcpThread::runTcpServerThread() {
+void TcpThread::runTcpServerThread() {
 
     initTcp();
-    while (true) {
+    while (keepGoing) {
         int socket = acceptClient();
-        std::thread tcpWorker(&TcpThread::receive, this, socket);
+        if(socket > 0)
+            std::thread tcpWorker(&TcpThread::receive, this, socket);
 //        receive(socket, true);
     }
 }
@@ -106,6 +112,11 @@ void TcpThread::receive(int socket){
 void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
 
     if(std::stoi(header) == DEMAND_CHUNK){
+        if(!connectedClients.at(socket).isSync){
+            sendSync(socket);
+            receiveSync(socket);
+            connectedClients.at(socket).isSync = true;
+        }
         demandChunkJob(payload, socket);
         receive(socket);
     }else{
@@ -114,17 +125,26 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
 
 }
 
-void TcpThread::demandChunkJob(char *payload, int socket){
-    if(!connectedClients.at(socket).isSync){
-        sendSync(socket);
-        receiveSync(socket);
-        connectedClients.at(socket).isSync = true;
+bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
+    sharedStructs.localResourcesMutex.lock();
+    if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() )
+        return false;
+    long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
+    for(const auto & index : message.chunkIndices) {
+        long offset = index * CHUNK_SIZE;
+        if (offset > fileSize){//todo może >= nie chce mi się myśleć
+            return false;
+        }
+
     }
+    sharedStructs.localResourcesMutex.unlock();
+    return true;
+}
+
+void TcpThread::demandChunkJob(char *payload, int socket){
     DemandChunkMessage message = DemandChunkMessage::deserializeChunkMessage(payload);
     ResourceInfo resource;
-    try{
-        sharedStructs.localResources.at(message.resourceName);
-    }catch (std::out_of_range& e){
+    if(!validateChunkDemand(message)){
         sendHeader(socket, INVALID_CHUNK_REQUEST);
         close(socket);
         return;
@@ -150,13 +170,9 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         memset(chunk, 0, CHUNK_SIZE);
         if (offset + CHUNK_SIZE <= fileSize) {
             ifs.read(chunk, CHUNK_SIZE);
-        } else if (offset > fileSize) {
-            ifs.read(chunk, fileSize - offset);
         } else {
-            std::cout << "INVALID CHUNK DEMAND" << std::endl;
-            sendHeader(socket, INVALID_CHUNK_REQUEST);
+            ifs.read(chunk, fileSize - offset);
         }
-
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%d;%s", CHUNK_TRANSFER, index, chunk);
 
@@ -243,6 +259,7 @@ void TcpThread::receiveSync(int socket){
         } else if(std::stoi(header) == SYNC_END){
             end = true;
         }else{
+            //invalid chunk request
             throw std::runtime_error("receive sync bad header");
         }
 
