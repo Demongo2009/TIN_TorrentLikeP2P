@@ -60,8 +60,8 @@ void UdpThread::receive(){
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
     struct sockaddr_in clientAddr{};
     socklen_t clientLength = sizeof(sockaddr_in);
-    std::string input = "tak;13399626275067451483;38";
-	handleNewResourceAvailable(const_cast<char *>(input.c_str()), clientAddr);
+//    std::string input = "tak;13399626275067451483;38";
+//	handleNewResourceAvailable(const_cast<char *>(input.c_str()), clientAddr);
     if (recvfrom(udpSocket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
         perror("receive error");
         exit(EXIT_FAILURE);
