@@ -4,7 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include "Message.h"
-
+#include <sstream>
 struct ResourceInfo {
     std::string resourceName;
     unsigned int sizeInBytes;
@@ -38,6 +38,27 @@ struct ResourceInfo {
         if(!currCharacter)
             throw std::runtime_error("unexpected end of serialized data while reading resource name");
 
+		currCharacter=message[++charIndex];
+		std::string revokeHashBuilder;
+
+		//do wektora to czekamy na albo NULL albo na srednik (;)
+		while(currCharacter && currCharacter!=';'){
+			if(isdigit(currCharacter))
+				revokeHashBuilder+=currCharacter;
+			else
+				throw std::runtime_error("invalid number while reading revoking hash (character is not a digit): ");
+			currCharacter=message[++charIndex];
+		}
+
+		try {
+			std::stringstream ss(revokeHashBuilder);
+			ss>>revokeHash;
+		}
+		catch (std::exception& exception){
+			throw std::runtime_error("exceeded number value limit or invalid character read while reading resource revoke hash");
+		}
+		if(!currCharacter)
+			throw std::runtime_error("unexpected end of serialized data while reading resource name");
         currCharacter=message[++charIndex];
         std::string sizeBuilder;
 
@@ -55,27 +76,7 @@ struct ResourceInfo {
             throw std::runtime_error("exceeded number value limit or invalid character read while reading resource size");
         }
 
-        if(!currCharacter)
-            throw std::runtime_error("unexpected end of serialized data while reading resource size");
 
-        currCharacter=message[++charIndex];
-        std::string revokeHashBuilder;
-
-        //do wektora to czekamy na albo NULL albo na srednik (;)
-        while(currCharacter && currCharacter!=';'){
-            if(isdigit(currCharacter))
-                revokeHashBuilder+=currCharacter;
-            else
-                throw std::runtime_error("invalid number while reading revoking hash (character is not a digit): ");
-            currCharacter=message[++charIndex];
-        }
-
-        try {
-            revokeHash = std::stoi(revokeHashBuilder);
-        }
-        catch (std::exception& exception){
-            throw std::runtime_error("exceeded number value limit or invalid character read while reading resource revoke hash");
-        }
         if(toVector)
             *dataPointer+=charIndex;
 

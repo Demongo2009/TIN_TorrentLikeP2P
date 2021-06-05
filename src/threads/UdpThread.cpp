@@ -60,6 +60,8 @@ void UdpThread::receive(){
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
     struct sockaddr_in clientAddr{};
     socklen_t clientLength = sizeof(sockaddr_in);
+    std::string input = "tak;13399626275067451483;38";
+	handleNewResourceAvailable(const_cast<char *>(input.c_str()), clientAddr);
     if (recvfrom(udpSocket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
         perror("receive error");
         exit(EXIT_FAILURE);
@@ -67,12 +69,13 @@ void UdpThread::receive(){
 
     printf("recv: %s\n", rbuf);
 
-    char header[HEADER_SIZE];
+    char header[HEADER_SIZE+1];
     char payload[MAX_SIZE_OF_PAYLOAD];
     memset(header, 0, HEADER_SIZE);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, sizeof(header), "%s", rbuf);
-    snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
+    snprintf(header, HEADER_SIZE+1, "%s", rbuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
+    std::cout<<"header: "<< header << " payload: " << payload << "\n";
     if(!(inet_ntoa(clientAddr.sin_addr) == myAddress)){
         handleUdpMessage(header, payload, clientAddr);
     }

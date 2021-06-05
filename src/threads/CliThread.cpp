@@ -59,8 +59,10 @@ void CliThread::runCliThread() {
                     handleRevokeResource(resourceName, userString);
                     break;
                 case EXIT:
-                    keepGoing = false;
-                    break;
+					// clean before quit?
+
+					keepGoing = false;
+					exit(0);
             }
         }
 
@@ -70,7 +72,6 @@ void CliThread::runCliThread() {
         std::getline(std::cin, line);
     }
 
-    // clean before quit?
 }
 
 void CliThread::terminate(){
