@@ -41,7 +41,9 @@ private:
     const int MAX_FILE_NAME_SIZE = 256;
     pthread_barrier_t* barrier;
 
-
+	static void startDownloadResourceJob(CliThread* cliThread, const std::string &resource,const std::string& filepath){
+		cliThread->downloadResourceJob(resource,filepath);
+	}
 
     void handleClientAddResource(const std::string& resourceName, const std::string& resourcePath, const std::string& userPassword);
 
@@ -69,6 +71,8 @@ private:
     static void writeFile(const char *payload, unsigned int size, const std::string &filepath);
 
     void downloadResourceJob(const std::string &resource, const std::string &filepath);
+
+	void loadPassword(std::string &password);
 };
 
 #endif //TIN_TORRENTLIKEP2P_CLITHREAD_H
