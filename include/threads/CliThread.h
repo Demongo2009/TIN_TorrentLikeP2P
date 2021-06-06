@@ -17,8 +17,8 @@ class CliThread{
 
 public:
 
-    CliThread(SharedStructs& structs, TcpThread* tcpThread, UdpThread* udpThread) : sharedStructs(structs), tcpObj(tcpThread),
-                                                                                    udpObj(udpThread){
+    CliThread(SharedStructs& structs, std::unique_ptr<TcpThread>& tcpThread, std::unique_ptr<UdpThread>& udpThread) :
+    sharedStructs(structs), tcpObj(tcpThread), udpObj(udpThread){
         keepGoing = true;
     }
 
@@ -33,8 +33,8 @@ public:
 
 private:
     SharedStructs& sharedStructs;
-    TcpThread* tcpObj;
-    UdpThread* udpObj;
+    std::unique_ptr<TcpThread>& tcpObj;
+    std::unique_ptr<UdpThread>& udpObj;
     std::set<int> openSockets;
     std::set<std::string> ongoingDowloadingFilepaths;
     bool keepGoing;

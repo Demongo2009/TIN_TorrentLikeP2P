@@ -35,7 +35,7 @@ public:
 private:
     SharedStructs& sharedStructs;
     int udpSocket;
-    const int port = 41093;
+    const int port = 5555;
     const std::string myAddress = "127.0.0.1";
     struct sockaddr_in recv_addr;
     bool keepGoing;

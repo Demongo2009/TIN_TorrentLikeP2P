@@ -42,6 +42,7 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
 void UdpThread::runUdpServerThread() {
     initUdp();
 	pthread_barrier_wait(barrier);
+    std::cout<<"BROADCAST"<<std::endl;
     broadcastNewNode();
     while (keepGoing){
         receive();
@@ -53,6 +54,7 @@ void UdpThread::terminate(){
     std::cout<<"UDPTERM"<<std::endl;
     broadcastLogout();
     close(udpSocket);
+    exit(0);
 }
 
 void UdpThread::receive(){
@@ -62,6 +64,7 @@ void UdpThread::receive(){
     socklen_t clientLength = sizeof(sockaddr_in);
 //    std::string input = "tak;13399626275067451483;38";
 //	handleNewResourceAvailable(const_cast<char *>(input.c_str()), clientAddr);
+    std::cout<<"UDP"<<std::endl;
     if (recvfrom(udpSocket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
         perror("receive error");
         exit(EXIT_FAILURE);
@@ -114,7 +117,7 @@ void UdpThread::initUdp() {
     broadcastAddress.sin_family = AF_INET;
     broadcastAddress.sin_port = (in_port_t) htons(port);
     // broadcasting address for unix (?)
-    inet_aton("255.255.255.255", &broadcastAddress.sin_addr);
+    inet_aton("127.255.255.255", &broadcastAddress.sin_addr);
 
 }
 

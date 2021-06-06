@@ -15,9 +15,9 @@ void TorrentClient::run() {
 	cliObj->setBarrier(&barrier);
 
 
-    std::thread udpThread(UdpThread::start, udpObj);
-    std::thread tcpThread(TcpThread::start, tcpObj);
-    std::thread cliThread(CliThread::start, cliObj);
+    std::thread udpThread(UdpThread::start, udpObj.get());
+    std::thread tcpThread(TcpThread::start, tcpObj.get());
+    std::thread cliThread(CliThread::start, cliObj.get());
 
     cliThread.join();
     tcpObj->terminate();
