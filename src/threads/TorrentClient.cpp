@@ -22,7 +22,7 @@ void TorrentClient::run() {
         tcpObj->terminate();
         udpObj->terminate();
     }catch (std::exception& e){
-        std::cout<<e.what()<<std::endl;
+        std::cout<<"catch"<<e.what()<<std::endl;
         cliObj->terminate();
         tcpObj->terminate();
         udpObj->terminate();

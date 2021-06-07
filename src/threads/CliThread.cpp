@@ -229,6 +229,7 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
 
 void CliThread::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
     std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
+    downloadThread.detach();
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
