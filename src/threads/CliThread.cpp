@@ -381,10 +381,12 @@ void CliThread::handleRevokeResource(const std::string& resourceName, const std:
     sharedStructs.localResourcesMutex.lock();
     std::size_t hash = std::hash<std::string>{}(userPassword);
     if(sharedStructs.localResources.find(resourceName) == sharedStructs.localResources.end()){
+        sharedStructs.localResourcesMutex.unlock();
         std::cout<<"No such resource"<<std::endl;
         return;
     }
     if(sharedStructs.localResources.at(resourceName).revokeHash != hash ){
+        sharedStructs.localResourcesMutex.unlock();
         std::cout<<"You are not an original owner of this resource"<<std::endl;
         return;
     }
