@@ -42,7 +42,6 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
 void UdpThread::runUdpServerThread() {
     initUdp();
 	pthread_barrier_wait(barrier);
-    std::cout<<"BROADCAST"<<std::endl;
     broadcastNewNode();
     while (keepGoing){
         receive();
@@ -51,7 +50,6 @@ void UdpThread::runUdpServerThread() {
 
 void UdpThread::terminate(){
     keepGoing = false;
-    std::cout<<"UDPTERM"<<std::endl;
     broadcastLogout();
     close(udpSocket);
     exit(0);
@@ -79,6 +77,7 @@ void UdpThread::receive(){
     snprintf(header, HEADER_SIZE+1, "%s", rbuf);
     snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
     std::cout<<"header: "<< header << " payload: " << payload << "\n";
+    std::cout<<"clientaddr: "<< inet_ntoa(clientAddr.sin_addr) << " port: " << htons (clientAddr.sin_port) << "\n";
     if(!(inet_ntoa(clientAddr.sin_addr) == myAddress)){
         handleUdpMessage(header, payload, clientAddr);
     }
@@ -244,6 +243,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
             snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
+            std::cout<<"sendmystateto: "<< inet_ntoa(newPeer.sin_addr) << " port: " << htons (newPeer.sin_port) << "\n";
             if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
                 errno_abort("send");
             }
