@@ -247,7 +247,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     unsigned int fileSize;
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
-        if( it != sharedStructs.localResources.end()){
+        if( it != resources.end()){
             addr.sin_addr.s_addr = peerAddress.first;
             addr.sin_port = peerAddress.second;
             addr.sin_family = AF_INET;
