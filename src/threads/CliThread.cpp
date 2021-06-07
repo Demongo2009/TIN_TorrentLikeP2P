@@ -62,7 +62,7 @@ void CliThread::runCliThread() {
 					// clean before quit?
 
 					keepGoing = false;
-					exit(0);
+                    return;
             }
         }
 
