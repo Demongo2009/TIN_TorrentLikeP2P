@@ -391,7 +391,9 @@ void CliThread::writeFile( const char* payload, unsigned int index, const std::s
 
 std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, unsigned int fileSize){
     std::vector<std::vector<int> > chunkIndices;
-    int chunks = ceil((double) fileSize / CHUNK_SIZE );
+    int c = CHUNK_SIZE;
+    int f = fileSize;
+    int chunks = ceil((double) f / c );
     int chunksPerPeer = ceil((double) chunks / peersCount );
     for(int i = 0; i < chunksPerPeer && i < chunks; ++i){
         chunkIndices.emplace_back(std::vector<int>());
