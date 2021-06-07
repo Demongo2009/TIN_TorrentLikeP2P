@@ -13,6 +13,16 @@
 #include "../../include/utils.h"
 #include "../../include/threads/CliThread.h"
 
+std::string CliThread::getUserPassword(){
+    std::string prompt = "\nPlease input password:...\n";
+    std::cout << prompt;
+
+    std::string line;
+    std::getline(std::cin, line);
+    return line;
+}
+
+
 void CliThread::runCliThread() {
 	pthread_barrier_wait(barrier);
     std::stringstream ss;
@@ -44,7 +54,9 @@ void CliThread::runCliThread() {
         if(foundCommand){
             switch (parsedCommand) {
                 case ADD_NEW_RESOURCE:
-                    handleClientAddResource(resourceName, userString,"TEMPORARY PASSWORD");
+                    std::string password = getUserPassword();
+
+                    handleClientAddResource(resourceName, userString,password);
                     break;
                 case LIST_AVAILABLE_RESOURCES:
                     handleClientListResources();
@@ -56,7 +68,8 @@ void CliThread::runCliThread() {
                     handleDownloadResource(resourceName, userString);
                     break;
                 case REVOKE_RESOURCE:
-                    handleRevokeResource(resourceName, userString);
+                    std::string password = getUserPassword();
+                    handleRevokeResource(resourceName, password);
                     break;
                 case EXIT:
 					// clean before quit?

@@ -40,7 +40,7 @@ private:
     bool keepGoing;
     const int MAX_FILE_NAME_SIZE = 256;
     pthread_barrier_t* barrier;
-
+    std::string CliThread::getUserPassword();
 
 
     void handleClientAddResource(const std::string& resourceName, const std::string& resourcePath, const std::string& userPassword);
