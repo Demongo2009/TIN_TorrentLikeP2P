@@ -36,7 +36,7 @@ struct ResourceInfo {
 
         //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
         if(!currCharacter)
-            throw std::runtime_error("unexpected end of serialized data while reading resource name");
+            return ResourceInfo(resourceName);
 
 		currCharacter=message[++charIndex];
 		std::string revokeHashBuilder;
