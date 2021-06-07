@@ -117,7 +117,7 @@ void UdpThread::initUdp() {
     broadcastAddress.sin_family = AF_INET;
     broadcastAddress.sin_port = (in_port_t) htons(port);
     // broadcasting address for unix (?)
-    inet_aton("127.255.255.255", &broadcastAddress.sin_addr);
+    inet_aton("255.255.255.255", &broadcastAddress.sin_addr);
 
 }
 
