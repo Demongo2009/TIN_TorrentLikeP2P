@@ -26,7 +26,7 @@ public:
 
     void broadcastNewFile(const ResourceInfo& resource);
 
-    void broadcastRevokeFile(const ResourceInfo& resource);
+    void broadcastRevokeFile(const std::string& resource);
     void terminate();
 
 	void setBarrier(pthread_barrier_t *ptr);

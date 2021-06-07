@@ -190,6 +190,19 @@ void CliThread::handleClientAddResource(const std::string& resourceName, const s
     resourceInfo.isRevoked = false;
 
     sharedStructs.localResourcesMutex.lock();
+    if(sharedStructs.localResources.find(resourceName) != sharedStructs.localResources.end()){
+        std::cout << "File of this name already exists!\n";
+        sharedStructs.localResourcesMutex.unlock();
+        return;
+    }
+    for(auto& resources: sharedStructs.networkResources){
+        auto it = resources.second.find(resourceName);
+        if( it != resources.second.end()){
+            std::cout << "File of this name already exists!\n";
+            sharedStructs.localResourcesMutex.unlock();
+            return;
+        }
+    }
     sharedStructs.localResources.emplace(resourceName, resourceInfo);
     sharedStructs.localResourcesMutex.unlock();
     sharedStructs.filepaths.insert(std::make_pair(resourceName, filepath));
@@ -406,7 +419,16 @@ void CliThread::handleRevokeResource(const std::string& resourceName, const std:
 //    localResources.at(resourceName).isRevoked = true;
     sharedStructs.localResources.erase(resourceName);
     sharedStructs.localResourcesMutex.unlock();
-    udpObj->broadcastRevokeFile(sharedStructs.localResources.at(resourceName));
+    sharedStructs.networkResourcesMutex.lock();
+    for(auto& resources: sharedStructs.networkResources){
+        auto it = resources.second.find(resourceName);
+        if( it != resources.second.end()){
+            resources.second.erase(resourceName);
+        }
+    }
+    sharedStructs.networkResourcesMutex.unlock();
+
+    udpObj->broadcastRevokeFile(resourceName);
 
 }
 

@@ -185,9 +185,9 @@ void UdpThread::broadcastNewFile(const ResourceInfo& resource)
     genericBroadcast(NEW_RESOURCE_AVAILABLE, sbuf);
 }
 
-void UdpThread::broadcastRevokeFile(const ResourceInfo& resource){
+void UdpThread::broadcastRevokeFile(const std::string& resource){
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-    snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
+    snprintf(sbuf, sizeof(sbuf), "%s", resource.c_str());
     genericBroadcast(OWNER_REVOKED_RESOURCE, sbuf);
 }
 
