@@ -36,7 +36,7 @@ private:
     SharedStructs& sharedStructs;
     int udpSocket;
     const int port = 5555;
-    const std::string myAddress = "127.0.0.1";
+    std::string myAddress;
     struct sockaddr_in recv_addr;
     bool keepGoing;
     struct sockaddr_in broadcastAddress;
@@ -63,7 +63,7 @@ private:
     void handleNewNodeInNetwork(sockaddr_in sockaddr);
 
     void sendMyState(sockaddr_in in);
-
+    void getMyAddress();
 };
 
 #endif //TIN_TORRENTLIKEP2P_UDPTHREAD_H

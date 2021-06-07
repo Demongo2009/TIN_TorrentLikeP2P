@@ -75,7 +75,7 @@ void CliThread::runCliThread() {
 					// clean before quit?
 
 					keepGoing = false;
-					exit(0);
+                    return;
             }
         }
 
@@ -242,6 +242,7 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
 
 void CliThread::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
     std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
+    downloadThread.detach();
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
@@ -259,7 +260,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     unsigned int fileSize;
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
-        if( it != sharedStructs.localResources.end()){
+        if( it != resources.end()){
             addr.sin_addr.s_addr = peerAddress.first;
             addr.sin_port = peerAddress.second;
             addr.sin_family = AF_INET;
@@ -392,8 +393,14 @@ std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, un
 void CliThread::handleRevokeResource(const std::string& resourceName, const std::string& userPassword) {
     sharedStructs.localResourcesMutex.lock();
     std::size_t hash = std::hash<std::string>{}(userPassword);
+    if(sharedStructs.localResources.find(resourceName) == sharedStructs.localResources.end()){
+        sharedStructs.localResourcesMutex.unlock();
+        std::cout<<"No such resource"<<std::endl;
+        return;
+    }
     if(sharedStructs.localResources.at(resourceName).revokeHash != hash ){
-        std::cout<<"YOU HAVE NO RIGHT SIR"<<std::endl;
+        sharedStructs.localResourcesMutex.unlock();
+        std::cout<<"You are not an original owner of this resource"<<std::endl;
         return;
     }
 //    localResources.at(resourceName).isRevoked = true;
