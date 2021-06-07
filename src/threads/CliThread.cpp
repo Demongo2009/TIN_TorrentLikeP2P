@@ -379,8 +379,12 @@ std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, un
 void CliThread::handleRevokeResource(const std::string& resourceName, const std::string& userPassword) {
     sharedStructs.localResourcesMutex.lock();
     std::size_t hash = std::hash<std::string>{}(userPassword);
+    if(sharedStructs.localResources.find(resourceName) == sharedStructs.localResources.end()){
+        std::cout<<"No such resource"<<std::endl;
+        return;
+    }
     if(sharedStructs.localResources.at(resourceName).revokeHash != hash ){
-        std::cout<<"YOU HAVE NO RIGHT SIR"<<std::endl;
+        std::cout<<"You are not an original owner of this resource"<<std::endl;
         return;
     }
 //    localResources.at(resourceName).isRevoked = true;
