@@ -252,6 +252,9 @@ void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
 void UdpThread::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(message);
     sharedStructs.networkResourcesMutex.lock();
+    if( resources.empty() ){
+        sharedStructs.networkResources[convertAddress(sockaddr)] = std::map<std::string, ResourceInfo>();
+    }
     for(const auto & r : resources){
         sharedStructs.networkResources[convertAddress(sockaddr)][r.resourceName] = r;
     }
