@@ -273,7 +273,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
     for(const auto& [resourceName, resource] : sharedStructs.localResources){
-        if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
+        if(ss.str().size() + resourceName.size() + sizeof(long) + sizeof(int) > MAX_SIZE_OF_PAYLOAD){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
             snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
@@ -283,7 +283,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
             }
             ss.clear();
         }
-        ss << ";" << resource.resourceName;
+        ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
     }
 
     sharedStructs.localResourcesMutex.unlock();
