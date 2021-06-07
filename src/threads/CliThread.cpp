@@ -41,7 +41,7 @@ void CliThread::runCliThread() {
 
     while(keepGoing){
         ClientCommand parsedCommand;
-        std::string userString, resourceName;
+        std::string userString, resourceName, password;
         std::cout<<"CLI"<<std::endl;
         ss << line;
         for(std::string s; ss >>s;){
@@ -54,7 +54,7 @@ void CliThread::runCliThread() {
         if(foundCommand){
             switch (parsedCommand) {
                 case ADD_NEW_RESOURCE:
-                    std::string password = getUserPassword();
+                    password = getUserPassword();
 
                     handleClientAddResource(resourceName, userString,password);
                     break;
@@ -68,7 +68,7 @@ void CliThread::runCliThread() {
                     handleDownloadResource(resourceName, userString);
                     break;
                 case REVOKE_RESOURCE:
-                    std::string password = getUserPassword();
+                    password = getUserPassword();
                     handleRevokeResource(resourceName, password);
                     break;
                 case EXIT:
