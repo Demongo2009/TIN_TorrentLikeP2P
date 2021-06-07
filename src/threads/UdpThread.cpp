@@ -70,7 +70,7 @@ void UdpThread::receive(){
         perror("receive error");
         exit(EXIT_FAILURE);
     }
-
+    clientAddr.sin_port = (in_port_t) htons(port);
     printf("recv: %s\n", rbuf);
 
     char header[HEADER_SIZE+1];
@@ -269,7 +269,6 @@ void UdpThread::handleNodeLeftNetwork(sockaddr_in sockaddr) {
 
 void UdpThread::sendMyState(sockaddr_in newPeer) {
     std::stringstream ss;
-    newPeer.sin_port = (in_port_t) htons(port);
     sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
