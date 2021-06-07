@@ -114,12 +114,12 @@ void UdpThread::getMyAddress(){
 }
 
 void UdpThread::initUdp() {
-    getMyAddress();
+
     int trueFlag = 1;
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
-
+    getMyAddress();
 
     if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");
