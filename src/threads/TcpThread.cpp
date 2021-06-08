@@ -146,7 +146,7 @@ bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
     if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() ) {
         sharedStructs.localResourcesMutex.unlock();
         return false;
-    };
+    }
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     for(const auto & index : message.chunkIndices) {
         long offset = index * CHUNK_SIZE;
@@ -184,8 +184,9 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     sharedStructs.localResourcesMutex.unlock();
     char chunk[CHUNK_SIZE];
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    int c = CHUNK_SIZE;
     for(const auto & index : message.chunkIndices) {
-        long offset = index * CHUNK_SIZE;
+        long offset = index * c;
         ifs.seekg(offset, std::ios::beg);
         memset(chunk, 0, CHUNK_SIZE);
         if (offset + CHUNK_SIZE <= fileSize) {
@@ -196,7 +197,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%d;%s", CHUNK_TRANSFER, index, chunk);
 
-        if (send(socket, sbuf, sizeof sbuf, 0)) {
+        if (send(socket, sbuf, sizeof sbuf, 0) < 0) {
             errno_abort("send chunk");
         }
     }

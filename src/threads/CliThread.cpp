@@ -371,13 +371,14 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
         memset(header, 0, HEADER_SIZE);
         snprintf(header, HEADER_SIZE, "%s", rbuf);
         memset(indexBuffer, 0, sizeof indexBuffer);
-        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header + 1);
+        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header );
 
         std::cout<<"indexbuffer "<<indexBuffer<<" header "<<header<< " rbuf "<< rbuf <<std::endl;
-        index = std::stoi(indexBuffer);
+
         if (std::stoi(header) == CHUNK_TRANSFER) {
             memset(payload, 0, CHUNK_SIZE);
             snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE)*2);
+            index = std::stoi(indexBuffer);
             writeFile(payload, index, filepath);
         } else {
             //invalid chunk request
@@ -389,8 +390,10 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
 
 
 void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
-    std::ofstream ofs (filepath, std::ofstream::out | std::ofstream::binary);
-    long offset = index * CHUNK_SIZE;
+    std::ofstream ofs ("a", std::ofstream::out | std::ofstream::binary);
+    int c = CHUNK_SIZE;
+    long offset = index * c;
+    std::cout<<"offset"<<offset<<std::endl;
     ofs.seekp(offset, std::ios::beg);
     ofs<<payload;
     ofs.close();

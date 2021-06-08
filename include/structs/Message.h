@@ -12,15 +12,13 @@
 
 //      NAZWA=KOD                       CO PRZESYLAMY
 enum TcpMessageCode {
-    DEMAND_CHUNK=140,                   // resourceName, indexOfChunk
+    DEMAND_CHUNK=140,                   // resourceName, vectof<indexOfChunk>
     MY_STATE_BEFORE_FILE_TRANSFER=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
-    CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
+    CHUNK_TRANSFER=142,                 // indexOfChunk, data
     SYNC_END = 143,
-    REQUEST_SYNC_END,
-    ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
-    ERROR_WHILE_SENDING=540,            // EMPTY
-    ERROR_WHILE_RECEIVING=541,          // EMPTY
-    INVALID_CHUNK_REQUEST
+//    ERROR_WHILE_SENDING=540,            // EMPTY
+//    ERROR_WHILE_RECEIVING=541,          // EMPTY
+    INVALID_CHUNK_REQUEST = 542
 };
 enum UdpMessageCode {
     NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokePassword, sizeInBytes
