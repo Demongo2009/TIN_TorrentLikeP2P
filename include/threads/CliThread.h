@@ -65,7 +65,7 @@ private:
 
     void receiveChunks(int sock, int chunksCount, const std::string &filepath);
 
-
+    void reserveFile(int chunksCount, const std::string& filepath);
     static void writeFile(const char *payload, unsigned int size, const std::string &filepath);
 
     void downloadResourceJob(const std::string &resource, const std::string &filepath);

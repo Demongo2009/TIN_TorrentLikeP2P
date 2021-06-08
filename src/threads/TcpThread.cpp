@@ -72,11 +72,11 @@ int TcpThread::acceptClient() {
         printf("GETPEERNAME ERROR: %s\n", strerror(errno));
     }
     else {
-        std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr);
+        std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr)<< "socket: "<<clientSocket<<std::endl;
     }
     connectedClients.insert(std::make_pair(clientSocket, clientAddr));
     for(auto& it: connectedClients){
-        std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"port "<<htons(it.second.address.sin_port)<<std::endl;
+        std::cout<<"connectedcleints"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"port "<<htons(it.second.address.sin_port)<<std::endl;
     }
     return clientSocket;
 }
@@ -138,6 +138,7 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
         }
         demandChunkJob(payload, socket);
         receive(socket);
+        connectedClients.erase(socket);
     }else{
         throw std::runtime_error("bad tcp header received");
     }
@@ -214,10 +215,11 @@ void TcpThread::sendHeader(int socket, TcpMessageCode code){
     char sbuf[HEADER_SIZE];
     memset(sbuf, 0, sizeof(sbuf));
     snprintf(sbuf, sizeof(sbuf), "%d", code);
-
-    if (send(socket, sbuf, sizeof sbuf, 0) < 0) {
+    int n;
+    if ( (n = send(socket, sbuf, sizeof sbuf, 0)) < 0 ) {
         errno_abort("send code error");
     }
+    std::cout<<"SEND HEADER "<< sbuf<< "n: "<< n << std::endl;
 }
 
 void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr){

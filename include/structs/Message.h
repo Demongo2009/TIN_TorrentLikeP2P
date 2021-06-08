@@ -135,10 +135,8 @@ struct ChunkTransfer{
             currCharacter=message[++charIndex];
         }
         ++charIndex;
-        std::cout<<" strlen: "<<strlen(message) - charIndex <<"message :" << message + charIndex <<std::endl;
         strncpy( payload, message + charIndex, strlen(message) - charIndex );
         payload[strlen(message) - charIndex] = '\0';
-        std::cout<<"po skopiowaniu "<< payload<<std::endl;
         return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoi(currentIndex), payload);
     }
 };

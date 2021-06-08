@@ -360,9 +360,20 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
         tcpObj->sendSync(sock, sockaddr);
         std::cout<<"poszlo"<<std::endl;
     }
+    unsigned int size = sharedStructs.networkResources[sockaddr.sin_addr.s_addr].at(resourceName).sizeInBytes;
+    reserveFile(size, filepath);
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
     openSockets.erase(sock);
+}
+
+void CliThread::reserveFile(int fileSize, const std::string& filepath){
+    FILE * pFile;
+    char buffer[] = {"1"};
+    pFile = std::fopen (filepath.c_str(), "wb");
+    for(int i = 0; i < fileSize; ++i)
+        std::fwrite (buffer , sizeof(char), 1, pFile);
+    std::fclose (pFile);
 }
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
@@ -378,7 +389,7 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
             exit(EXIT_FAILURE);
         }
         ChunkTransfer message = ChunkTransfer::deserializeChunkTransfer(rbuf);
-        std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< "\n\n\n zdeserializowanyrbuf"<<rbuf<< std::endl;
+        std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
 //        std::cout<<" rbuf "<< rbuf<<std::endl;
 //        memset(header, 0, HEADER_SIZE);
 //        snprintf(header, HEADER_SIZE, "%s", rbuf);
@@ -402,7 +413,7 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
 
 
 void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
-    std::ofstream ofs (filepath, std::ios::app | std::ofstream::out | std::ofstream::binary);
+    std::ofstream ofs (filepath, std::ios::in | std::ofstream::out | std::ofstream::binary);
     int c = CHUNK_SIZE;
     long offset = index * c;
     ofs.seekp(offset, std::ios::beg);
