@@ -1,5 +1,6 @@
 #include <memory>
 #include <csignal>
+#include <iostream>
 #include "include/threads/TorrentClient.h"
 
 SharedStructs structs;
@@ -10,6 +11,7 @@ void signalHandler(int signum){
 }
 
 int main(){
+
 
     std::signal(SIGTERM, signalHandler);
     std::signal(SIGQUIT, signalHandler);

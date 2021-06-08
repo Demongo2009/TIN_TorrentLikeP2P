@@ -197,6 +197,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
             ifs.read(chunk, CHUNK_SIZE);
         } else {
             ifs.read(chunk, fileSize - offset);
+            chunk[fileSize - offset] = '\0';
         }
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%d;%s", CHUNK_TRANSFER, index, chunk);

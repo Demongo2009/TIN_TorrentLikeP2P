@@ -367,29 +367,31 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
-    char header[HEADER_SIZE];
-    char indexBuffer[sizeof (int)];
-    char payload[MAX_SIZE_OF_PAYLOAD];
-    int index;
+//    char header[HEADER_SIZE];
+//    char indexBuffer[sizeof (int)];
+//    char payload[MAX_SIZE_OF_PAYLOAD];
+//    int index;
     for(int i = 0; i < chunksCount; ++i) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
         if (recv(sock, rbuf, sizeof(rbuf), 0) < 0) {
             perror("receive error");
             exit(EXIT_FAILURE);
         }
-        std::cout<<" rbuf "<< rbuf<<std::endl;
-        memset(header, 0, HEADER_SIZE);
-        snprintf(header, HEADER_SIZE, "%s", rbuf);
-        memset(indexBuffer, 0, sizeof indexBuffer);
-        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header );
+        ChunkTransfer message = ChunkTransfer::deserializeChunkTransfer(rbuf);
+        std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<<std::endl;
+//        std::cout<<" rbuf "<< rbuf<<std::endl;
+//        memset(header, 0, HEADER_SIZE);
+//        snprintf(header, HEADER_SIZE, "%s", rbuf);
+//        memset(indexBuffer, 0, sizeof indexBuffer);
+//        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header );
+//
+//        std::cout<<"indexbuffer "<<indexBuffer<<" header "<<header<< " rbuf "<< rbuf <<std::endl;
 
-        std::cout<<"indexbuffer "<<indexBuffer<<" header "<<header<< " rbuf "<< rbuf <<std::endl;
-
-        if (std::stoi(header) == CHUNK_TRANSFER) {
-            memset(payload, 0, CHUNK_SIZE);
-            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE)*2);
-            index = std::stoi(indexBuffer);
-            writeFile(payload, index, filepath);
+        if (message.header == CHUNK_TRANSFER) {
+//            memset(message.payload, 0, CHUNK_SIZE);
+//            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE)*2);
+//            index = std::stoi(indexBuffer);
+            writeFile(message.payload, message.index, filepath);
         } else {
             //invalid chunk request
             throw std::runtime_error("receive chunks bad header");
@@ -401,9 +403,8 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
 
 void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
     std::ofstream ofs (filepath, std::ios::app | std::ofstream::out | std::ofstream::binary);
-    int c = CHUNK_SIZE + 1;
+    int c = CHUNK_SIZE;
     long offset = index * c;
-    std::cout<<"offset"<<offset<<std::endl;
     ofs.seekp(offset, std::ios::beg);
     ofs<<payload;
     ofs.close();
