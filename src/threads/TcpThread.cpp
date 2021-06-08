@@ -150,7 +150,7 @@ bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     int c = CHUNK_SIZE;
     for(const auto & index : message.chunkIndices) {
-        long offset = index * CHUNK_SIZE;
+        long offset = index * c;
         if (offset > fileSize){//todo może >= nie chce mi się myśleć
             sharedStructs.localResourcesMutex.unlock();
             return false;
@@ -190,7 +190,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         long offset = index * c;
         ifs.seekg(offset, std::ios::beg);
         memset(chunk, 0, CHUNK_SIZE);
-        if (offset + CHUNK_SIZE <= fileSize) {
+        if (offset + c <= fileSize) {
             ifs.read(chunk, CHUNK_SIZE);
         } else {
             ifs.read(chunk, fileSize - offset);
