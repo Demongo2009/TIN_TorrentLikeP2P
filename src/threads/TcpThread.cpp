@@ -120,6 +120,7 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
 
     if(std::stoi(header) == DEMAND_CHUNK){
         if(!connectedClients.at(socket).isSync){
+            std::cout<<"syncing"<<std::endl;
             sendSync(socket);
             receiveSync(socket);
             connectedClients.at(socket).isSync = true;
@@ -134,12 +135,15 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
 
 bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
     sharedStructs.localResourcesMutex.lock();
-    if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() )
+    if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() ) {
+        sharedStructs.localResourcesMutex.unlock();
         return false;
+    }
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     for(const auto & index : message.chunkIndices) {
         long offset = index * CHUNK_SIZE;
         if (offset > fileSize){//todo może >= nie chce mi się myśleć
+            sharedStructs.localResourcesMutex.unlock();
             return false;
         }
 
@@ -152,6 +156,7 @@ void TcpThread::demandChunkJob(char *payload, int socket){
     DemandChunkMessage message = DemandChunkMessage::deserializeChunkMessage(payload);
     ResourceInfo resource;
     if(!validateChunkDemand(message)){
+        std::cout<<"invlid chunk request"<< message.resourceName << message.chunkIndices[0] <<std::endl;
         sendHeader(socket, INVALID_CHUNK_REQUEST);
         close(socket);
         return;
@@ -195,7 +200,7 @@ void TcpThread::sendHeader(int socket, TcpMessageCode code){
     memset(sbuf, 0, sizeof(sbuf));
     snprintf(sbuf, sizeof(sbuf), "%d", code);
 
-    if (send(socket, sbuf, sizeof sbuf, 0)) {
+    if (send(socket, sbuf, sizeof sbuf, 0) < 0) {
         errno_abort("send code error");
     }
 }
