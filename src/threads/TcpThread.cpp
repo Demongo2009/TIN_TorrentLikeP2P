@@ -107,8 +107,10 @@ void TcpThread::runTcpServerThread() {
     while (keepGoing) {
         std::cout<<"TCP"<<std::endl;
         int socket = acceptClient();
-        if(socket > 0)
+        if(socket > 0) {
             std::thread tcpWorker(&TcpThread::receive, this, socket);
+            tcpWorker.detach();
+        }
 //        receive(socket, true);
     }
 }
