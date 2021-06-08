@@ -76,7 +76,7 @@ int TcpThread::acceptClient() {
     }
     connectedClients.insert(std::make_pair(clientSocket, clientAddr));
     for(auto& it: connectedClients){
-        std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"issync "<<htons(it.second.address.sin_port)<<std::endl;
+        std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"port "<<htons(it.second.address.sin_port)<<std::endl;
     }
     return clientSocket;
 }
@@ -148,6 +148,7 @@ bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
         return false;
     }
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
+    int c = CHUNK_SIZE;
     for(const auto & index : message.chunkIndices) {
         long offset = index * CHUNK_SIZE;
         if (offset > fileSize){//todo może >= nie chce mi się myśleć
