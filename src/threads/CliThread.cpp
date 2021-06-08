@@ -336,7 +336,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             chunksCount = 0;
         }
         ++chunksCount;
-        ss << ";" << std::to_string(index);
+        ss<< std::to_string(index) << ";" ;
     }
     memset(sbuf, 0 , sizeof(sbuf));
     memset(payload, 0 , sizeof(payload));
