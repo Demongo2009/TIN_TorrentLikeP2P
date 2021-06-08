@@ -90,12 +90,12 @@ void TcpThread::receive(int socket){
 
     printf("recv: %s\n", rbuf);
 
-    char header[HEADER_SIZE];
+    char header[HEADER_SIZE+1];
     char payload[MAX_SIZE_OF_PAYLOAD];
-    memset(header, 0, HEADER_SIZE);
+    memset(header, 0, HEADER_SIZE+1);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, sizeof(header), "%s", rbuf);
-    snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
+    snprintf(header, HEADER_SIZE + 1, "%s", rbuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
 
     handleTcpMessage(header, payload, socket);
 
