@@ -75,6 +75,9 @@ int TcpThread::acceptClient() {
         std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr);
     }
     connectedClients.insert(std::make_pair(clientSocket, clientAddr));
+    for(auto& it: connectedClients){
+        std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"issync "<<htons(it.second.address.sin_port)<<std::endl;
+    }
     return clientSocket;
 }
 
@@ -117,12 +120,13 @@ void TcpThread::runTcpServerThread() {
 
 
 void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
-
+    std::cout<<"handletcp header "<<header<< " payload "<< payload;
     if(std::stoi(header) == DEMAND_CHUNK){
+        std::cout<<"handletcp"<<std::endl;
         if(!connectedClients.at(socket).isSync){
             std::cout<<"syncing"<<std::endl;
-            sendSync(socket);
-            if(receiveSync(socket)) {
+            sendSync(socket, std::nullopt);
+            if(receiveSync(socket, std::nullopt)) {
                 connectedClients.at(socket).isSync = true;
             } else{
                 std::cout<<"sync error"<<std::endl;
@@ -142,7 +146,7 @@ bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
     if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() ) {
         sharedStructs.localResourcesMutex.unlock();
         return false;
-    }
+    };
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     for(const auto & index : message.chunkIndices) {
         long offset = index * CHUNK_SIZE;
@@ -172,7 +176,7 @@ void TcpThread::demandChunkJob(char *payload, int socket){
 
 
 void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
-
+    std::cout<<"sendchunks"<<std::endl;
     std::string filepath = sharedStructs.filepaths.at(message.resourceName);
     std::ifstream ifs {filepath, std::ios::in | std::ios_base::binary};
     sharedStructs.localResourcesMutex.lock();
@@ -209,7 +213,7 @@ void TcpThread::sendHeader(int socket, TcpMessageCode code){
     }
 }
 
-void TcpThread::sendSync(int socket){
+void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr){
     std::stringstream ss;
     sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
@@ -241,15 +245,23 @@ void TcpThread::sendSync(int socket){
 
 }
 
-void TcpThread::clearPeerInfo(int socket){
+void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.erase(convertAddress(connectedClients.at(socket).address));
+    for(auto& it: connectedClients){
+        std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"issync "<<htons(it.second.address.sin_port)<<std::endl;
+    }
+    sharedStructs.networkResources.erase(convertAddress(sockaddr));
     sharedStructs.networkResourcesMutex.unlock();
 }
 
-bool TcpThread::receiveSync(int socket){
-
-    clearPeerInfo(socket);
+bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockaddrOpt ){
+    struct sockaddr_in sockaddr;
+    if(sockaddrOpt.has_value()){
+        sockaddr = sockaddrOpt.value();
+    }else{
+        sockaddr = connectedClients.at(socket).address;
+    }
+    clearPeerInfo(sockaddr);
     char rbuf[MAX_MESSAGE_SIZE];
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
@@ -264,15 +276,18 @@ bool TcpThread::receiveSync(int socket){
         snprintf(header, HEADER_SIZE , "%s", rbuf);
         std::cout<<"syncheader"<<header<<std::endl;
         if(std::stoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
+            std::cout<<"in"<<header<<std::endl;
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
             snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE);
             std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(payload);
             sharedStructs.networkResourcesMutex.lock();
             for(const auto & r : resources){
-                sharedStructs.networkResources[convertAddress(connectedClients.at(socket).address)][r.resourceName] = r;
+                std::cout<<"reveivesync"<<std::endl;
+                sharedStructs.networkResources[convertAddress(sockaddr)][r.resourceName] = r;
             }
             sharedStructs.networkResourcesMutex.unlock();
         } else if(std::stoi(header) == SYNC_END){
+            std::cout<<"in2"<<header<<std::endl;
             return true;
         }else{
             //invalid chunk request
@@ -280,8 +295,6 @@ bool TcpThread::receiveSync(int socket){
         }
 
     }
-
-
 
 }
 

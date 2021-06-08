@@ -292,7 +292,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     threads.reserve(peersPossessingResource.size());
     ongoingDowloadingFilepaths.insert(filepath);
     for(int i = 0; i < peersPossessingResource.size(); ++i){
-        threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], filepath);
+        threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath);
     }
     for(auto & thread: threads){
         thread.join();
@@ -305,7 +305,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     udpObj->broadcastNewFile(downloadedResource);
 }
 
-void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string &filepath){
+void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string& resourceName, const std::string &filepath){
 
     std::stringstream ss;
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
@@ -322,14 +322,14 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             memset(payload, 0 , sizeof(payload));
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
-            snprintf(sbuf, sizeof(sbuf), "%d;%s", DEMAND_CHUNK, payload);
+            snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
             if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("send");
             }
             ss.clear();
             if(first){
-                tcpObj->receiveSync(sock);
-                tcpObj->sendSync(sock);
+                tcpObj->receiveSync(sock, sockaddr);
+                tcpObj->sendSync(sock, sockaddr);
                 first = false;
             }
             receiveChunks(sock, chunksCount, filepath);
@@ -341,13 +341,14 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     memset(sbuf, 0 , sizeof(sbuf));
     memset(payload, 0 , sizeof(payload));
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-    snprintf(sbuf, sizeof(sbuf), "%d;%s", DEMAND_CHUNK, payload);
+    snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
     if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
         errno_abort("send");
     }
     if(first){
-        tcpObj->receiveSync(sock);
-        tcpObj->sendSync(sock);
+        tcpObj->receiveSync(sock,sockaddr);
+        tcpObj->sendSync(sock, sockaddr);
+        std::cout<<"poszlo"<<std::endl;
     }
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
@@ -366,11 +367,13 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
             perror("receive error");
             exit(EXIT_FAILURE);
         }
-
+        std::cout<<" rbuf "<< rbuf<<std::endl;
         memset(header, 0, HEADER_SIZE);
         snprintf(header, HEADER_SIZE, "%s", rbuf);
         memset(indexBuffer, 0, sizeof indexBuffer);
         snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header + 1);
+
+        std::cout<<"indexbuffer "<<indexBuffer<<" header "<<header<< " rbuf "<< rbuf <<std::endl;
         index = std::stoi(indexBuffer);
         if (std::stoi(header) == CHUNK_TRANSFER) {
             memset(payload, 0, CHUNK_SIZE);

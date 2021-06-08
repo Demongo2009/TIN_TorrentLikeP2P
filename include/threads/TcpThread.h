@@ -25,9 +25,9 @@ public:
     }
     void runTcpServerThread();
 
-    bool receiveSync(int socket);
+    bool receiveSync(int socket, std::optional<struct sockaddr_in> sockaddr);
 
-    void sendSync(int socket);
+    void sendSync(int socket, std::optional<struct sockaddr_in> sockaddr);
     void terminate();
 
 	void setBarrier(pthread_barrier_t *ptr);
@@ -59,7 +59,7 @@ private:
 
     static void sendHeader(int socket, TcpMessageCode code);
 
-    void clearPeerInfo(int socket);
+    void clearPeerInfo(struct sockaddr_in sockaddr);
     bool validateChunkDemand(const DemandChunkMessage& message);
 
 };

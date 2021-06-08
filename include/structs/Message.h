@@ -15,7 +15,7 @@ enum TcpMessageCode {
     DEMAND_CHUNK=140,                   // resourceName, indexOfChunk
     MY_STATE_BEFORE_FILE_TRANSFER=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
     CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
-    SYNC_END,
+    SYNC_END = 143,
     REQUEST_SYNC_END,
     ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
     ERROR_WHILE_SENDING=540,            // EMPTY
