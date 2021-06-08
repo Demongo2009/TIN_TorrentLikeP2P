@@ -254,7 +254,7 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
 
 
 void CliThread::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
-    std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
+    std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, "filepath");
     downloadThread.detach();
 }
 
@@ -287,11 +287,10 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
         return;
     }
     std::vector<std::vector<int> > chunkIndices = prepareChunkIndices(peersPossessingResource.size(), fileSize);
-    assert(peersPossessingResource.size() == chunkIndices.size()); //debug
     std::vector<std::thread> threads;
-    threads.reserve(peersPossessingResource.size());
+    threads.reserve(chunkIndices.size());
     ongoingDowloadingFilepaths.insert(filepath);
-    for(int i = 0; i < peersPossessingResource.size(); ++i){
+    for(int i = 0; i < chunkIndices.size(); ++i){
         threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath);
     }
     for(auto & thread: threads){
@@ -302,6 +301,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
     sharedStructs.localResourcesMutex.unlock();
+    sharedStructs.filepaths[resourceName] = filepath;
     udpObj->broadcastNewFile(downloadedResource);
 }
 
@@ -390,7 +390,7 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
 
 
 void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
-    std::ofstream ofs ("a", std::ofstream::out | std::ofstream::binary);
+    std::ofstream ofs (filepath, std::ofstream::out | std::ofstream::binary);
     int c = CHUNK_SIZE;
     long offset = index * c;
     std::cout<<"offset"<<offset<<std::endl;

@@ -46,7 +46,11 @@ void UdpThread::runUdpServerThread() {
 	pthread_barrier_wait(barrier);
     broadcastNewNode();
     while (keepGoing){
-        receive();
+        try {
+            receive();
+        }catch(std::exception& e ){
+            std::cout<<"udp catch: "<<e.what()<<std::endl;
+        }
     }
 }
 
@@ -215,7 +219,7 @@ void UdpThread::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
 
 void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.insert(std::make_pair(convertAddress(sockaddr), std::map<std::string, ResourceInfo>()));
+    sharedStructs.networkResources[convertAddress(sockaddr)] = std::map<std::string, ResourceInfo>();
     sharedStructs.networkResourcesMutex.unlock();
     sendMyState(sockaddr);
 }
