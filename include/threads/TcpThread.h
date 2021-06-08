@@ -38,7 +38,7 @@ private:
     SharedStructs& sharedStructs;
     int tcpSocket;
     const int port = 5555;
-    const std::string address = "127.0.0.1";
+    std::string myAddress;
     std::map<int, ConnectedPeerInfo> connectedClients;
 	pthread_barrier_t* barrier;
 

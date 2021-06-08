@@ -11,5 +11,6 @@
 void errno_abort(const std::string &header);
 
 std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address);
+std::string getMyAddress(int socket);
 
 #endif //TIN_TORRENTLIKEP2P_UTILS_H

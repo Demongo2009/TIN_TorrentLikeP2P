@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <iostream>
 #include <string>
-#include <sstream>
 #include <fstream>
 #include <cmath>
 #include <vector>
@@ -20,10 +19,11 @@ void TcpThread::initTcp(){
     struct sockaddr_in serverAddr{};
 
     tcpSocket = socket(PF_INET, SOCK_STREAM, 0);
+    myAddress = getMyAddress(tcpSocket);
     serverAddr.sin_family = AF_INET;
 
     serverAddr.sin_port = htons(port);
-    serverAddr.sin_addr.s_addr = inet_addr(address.c_str());
+    serverAddr.sin_addr.s_addr = inet_addr(myAddress.c_str());
 
 
     memset(serverAddr.sin_zero, 0, sizeof serverAddr.sin_zero);
@@ -213,7 +213,7 @@ void TcpThread::sendSync(int socket){
             }
             ss.clear();
         }
-        ss << ";" << resource.resourceName;
+        ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
     }
 
     sharedStructs.localResourcesMutex.unlock();

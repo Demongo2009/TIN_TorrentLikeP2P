@@ -4,16 +4,14 @@
 #include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
+
 #include <arpa/inet.h>
 #include <cstring>
 #include <iostream>
 #include <unistd.h>
 #include <string>
-#include <sstream>
 #include <fstream>
-#include <ifaddrs.h>
+
 #include <vector>
 #include "../../include/utils.h"
 #include "../../include/threads/UdpThread.h"
@@ -88,38 +86,13 @@ void UdpThread::receive(){
 
 }
 
-void UdpThread::getMyAddress(){
-    struct ifaddrs *ifap, *ifa;
-    char *addr;
-    std::string ethernetInterfaceName;
-    std::string ethernetInterfaceNameBegin = "e";
-    getifaddrs (&ifap);
-    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) {
-            if(strncmp(ifa->ifa_name, ethernetInterfaceNameBegin.c_str(), 1) == 0){
-                ethernetInterfaceName = ifa->ifa_name;
-                break;
-            }
-        }
-    }
-
-    freeifaddrs(ifap);
-    struct ifreq ifr;
-    ifr.ifr_addr.sa_family = AF_INET;
-    memcpy(ifr.ifr_name, ethernetInterfaceName.c_str(), IFNAMSIZ-1);
-    ioctl(udpSocket, SIOCGIFADDR, &ifr);
-    myAddress = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
-    printf("eiface is: %s\n",ethernetInterfaceName.c_str());
-    printf("System IP Address is: %s\n",myAddress.c_str());
-}
-
 void UdpThread::initUdp() {
 
     int trueFlag = 1;
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
-    getMyAddress();
+    myAddress = getMyAddress(udpSocket);
 
     if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");

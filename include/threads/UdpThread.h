@@ -63,7 +63,6 @@ private:
     void handleNewNodeInNetwork(sockaddr_in sockaddr);
 
     void sendMyState(sockaddr_in in);
-    void getMyAddress();
 };
 
 #endif //TIN_TORRENTLIKEP2P_UDPTHREAD_H
