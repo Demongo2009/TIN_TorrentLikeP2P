@@ -345,6 +345,10 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
         errno_abort("send");
     }
+    if(first){
+        tcpObj->receiveSync(sock);
+        tcpObj->sendSync(sock);
+    }
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
     openSockets.erase(sock);

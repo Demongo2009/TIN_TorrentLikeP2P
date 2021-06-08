@@ -122,8 +122,12 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
         if(!connectedClients.at(socket).isSync){
             std::cout<<"syncing"<<std::endl;
             sendSync(socket);
-            receiveSync(socket);
-            connectedClients.at(socket).isSync = true;
+            if(receiveSync(socket)) {
+                connectedClients.at(socket).isSync = true;
+            } else{
+                std::cout<<"sync error"<<std::endl;
+                return;
+            }
         }
         demandChunkJob(payload, socket);
         receive(socket);
@@ -243,18 +247,17 @@ void TcpThread::clearPeerInfo(int socket){
     sharedStructs.networkResourcesMutex.unlock();
 }
 
-void TcpThread::receiveSync(int socket){
+bool TcpThread::receiveSync(int socket){
 
     clearPeerInfo(socket);
     char rbuf[MAX_MESSAGE_SIZE];
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
-    bool end = false;
-    while (!end) {
+    while (true) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
         if (recv(socket, rbuf, sizeof(rbuf), 0) < 0) {
             perror("receive error");
-            exit(EXIT_FAILURE);
+            return false;
         }
 
         memset(header, 0, HEADER_SIZE);
@@ -270,13 +273,14 @@ void TcpThread::receiveSync(int socket){
             }
             sharedStructs.networkResourcesMutex.unlock();
         } else if(std::stoi(header) == SYNC_END){
-            end = true;
+            return true;
         }else{
             //invalid chunk request
             throw std::runtime_error("receive sync bad header");
         }
 
     }
+
 
 
 }

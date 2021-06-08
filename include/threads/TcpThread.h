@@ -25,7 +25,7 @@ public:
     }
     void runTcpServerThread();
 
-    void receiveSync(int socket);
+    bool receiveSync(int socket);
 
     void sendSync(int socket);
     void terminate();
