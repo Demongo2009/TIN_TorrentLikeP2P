@@ -71,12 +71,12 @@ void UdpThread::receive(){
     clientAddr.sin_port = (in_port_t) htons(port);
     printf("recv: %s\n", rbuf);
 
-    char header[HEADER_SIZE+1];
+    char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
     memset(header, 0, HEADER_SIZE);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, HEADER_SIZE+1, "%s", rbuf);
-    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
+    snprintf(header, HEADER_SIZE, "%s", rbuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE);
     std::string clientAddressString = inet_ntoa(clientAddr.sin_addr);
     std::cout<<"header: "<< header << " payload: " << payload << "\n";
     std::cout<<"clientaddr: "<< clientAddressString << " port: " << htons (clientAddr.sin_port) << "\n";

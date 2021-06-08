@@ -364,13 +364,13 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
         }
 
         memset(header, 0, HEADER_SIZE);
-        snprintf(header, sizeof(header), "%s", rbuf);
+        snprintf(header, HEADER_SIZE, "%s", rbuf);
         memset(indexBuffer, 0, sizeof indexBuffer);
         snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header + 1);
         index = std::stoi(indexBuffer);
         if (std::stoi(header) == CHUNK_TRANSFER) {
             memset(payload, 0, CHUNK_SIZE);
-            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE + 1)*2);
+            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE)*2);
             writeFile(payload, index, filepath);
         } else {
             //invalid chunk request

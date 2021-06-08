@@ -90,12 +90,12 @@ void TcpThread::receive(int socket){
 
     printf("recv: %s\n", rbuf);
 
-    char header[HEADER_SIZE+1];
+    char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
-    memset(header, 0, HEADER_SIZE+1);
+    memset(header, 0, HEADER_SIZE);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, HEADER_SIZE + 1, "%s", rbuf);
-    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
+    snprintf(header, HEADER_SIZE , "%s", rbuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE);
 
     handleTcpMessage(header, payload, socket);
 
@@ -247,7 +247,7 @@ void TcpThread::receiveSync(int socket){
 
     clearPeerInfo(socket);
     char rbuf[MAX_MESSAGE_SIZE];
-    char header[HEADER_SIZE+1];
+    char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
     bool end = false;
     while (!end) {
@@ -257,12 +257,12 @@ void TcpThread::receiveSync(int socket){
             exit(EXIT_FAILURE);
         }
 
-        memset(header, 0, HEADER_SIZE+1);
-        snprintf(header, HEADER_SIZE + 1, "%s", rbuf);
+        memset(header, 0, HEADER_SIZE);
+        snprintf(header, HEADER_SIZE , "%s", rbuf);
         std::cout<<"syncheader"<<header<<std::endl;
         if(std::stoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-            snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE + 1);
+            snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE);
             std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(payload);
             sharedStructs.networkResourcesMutex.lock();
             for(const auto & r : resources){
