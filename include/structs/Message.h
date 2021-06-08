@@ -16,9 +16,7 @@ enum TcpMessageCode {
     MY_STATE_BEFORE_FILE_TRANSFER=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
     CHUNK_TRANSFER=142,                 // indexOfChunk, data
     SYNC_END = 143,
-//    ERROR_WHILE_SENDING=540,            // EMPTY
-//    ERROR_WHILE_RECEIVING=541,          // EMPTY
-    INVALID_CHUNK_REQUEST = 542
+    INVALID_CHUNK_REQUEST = 440
 };
 enum UdpMessageCode {
     NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokePassword, sizeInBytes

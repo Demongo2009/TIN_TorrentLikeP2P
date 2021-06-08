@@ -286,7 +286,15 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
         std::cout<<"NONE IS IN POSSESSION OF THIS RESOURCE "<< resourceName<< std::endl;
         return;
     }
+    std::cout<<"count peers"<<peersPossessingResource.size()<<std::endl;
     std::vector<std::vector<int> > chunkIndices = prepareChunkIndices(peersPossessingResource.size(), fileSize);
+    std::cout<<"count chunk indices"<<chunkIndices.size()<<std::endl;
+    for(auto& indices: chunkIndices){
+        std::cout<<"PEER indices: "<<std::endl;
+        for(auto& i : indices){
+            std::cout<<"id: "<<i<<std::endl;
+        }
+    }
     std::vector<std::thread> threads;
     threads.reserve(chunkIndices.size());
     ongoingDowloadingFilepaths.insert(filepath);
@@ -336,7 +344,9 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             chunksCount = 0;
         }
         ++chunksCount;
-        ss<< std::to_string(index) << ";" ;
+        ss<< index << ";" ;
+        std::cout<<"STRINGS: " << ss.str() <<std::endl;
+
     }
     memset(sbuf, 0 , sizeof(sbuf));
     memset(payload, 0 , sizeof(payload));
@@ -390,8 +400,8 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
 
 
 void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
-    std::ofstream ofs (filepath, std::ofstream::out | std::ofstream::binary);
-    int c = CHUNK_SIZE;
+    std::ofstream ofs (filepath, std::ios::app | std::ofstream::out | std::ofstream::binary);
+    int c = CHUNK_SIZE + 1;
     long offset = index * c;
     std::cout<<"offset"<<offset<<std::endl;
     ofs.seekp(offset, std::ios::beg);
@@ -404,13 +414,13 @@ std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, un
     int c = CHUNK_SIZE;
     int f = fileSize;
     int chunks = ceil((double) f / c );
-    int chunksPerPeer = ceil((double) chunks / peersCount );
-    for(int i = 0; i < chunksPerPeer && i < chunks; ++i){
+//    int chunksPerPeer = ceil((double) chunks / peersCount );
+    for(int i = 0; i < peersCount && i < chunks; ++i){
         chunkIndices.emplace_back(std::vector<int>());
     }
 
     for(int i = 0; i < chunks; ++i){
-        chunkIndices[i%chunksPerPeer].emplace_back(i);
+        chunkIndices[i%peersCount].emplace_back(i);
     }
     return chunkIndices;
 }

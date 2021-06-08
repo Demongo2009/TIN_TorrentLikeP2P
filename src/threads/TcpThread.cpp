@@ -84,7 +84,7 @@ int TcpThread::acceptClient() {
 void TcpThread::receive(int socket){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
+    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) == 0) {
         perror("receive error");
         if(connectedClients.find(socket)!= connectedClients.end())
             connectedClients.erase(socket);
@@ -99,8 +99,11 @@ void TcpThread::receive(int socket){
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
     snprintf(header, HEADER_SIZE , "%s", rbuf);
     snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE);
-
-    handleTcpMessage(header, payload, socket);
+    try {
+        handleTcpMessage(header, payload, socket);
+    }catch (std::exception& e ){
+        std::cout<<"tcp catch: "<< e.what()<<std::endl;
+    }
 
 }
 
@@ -109,16 +112,11 @@ void TcpThread::runTcpServerThread() {
     initTcp();
 
     while (keepGoing) {
-        try {
-            std::cout << "TCP" << std::endl;
-            int socket = acceptClient();
-            if (socket > 0) {
-                std::thread tcpWorker(&TcpThread::receive, this, socket);
-                tcpWorker.detach();
-            }
-//        receive(socket, true);
-        }catch (std::exception& e){
-            std::cout<<"tcp catch"<<e.what()<<std::endl;
+        std::cout << "TCP" << std::endl;
+        int socket = acceptClient();
+        if (socket > 0) {
+            std::thread tcpWorker(&TcpThread::receive, this, socket);
+            tcpWorker.detach();
         }
     }
 }
@@ -274,7 +272,7 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
     char payload[MAX_SIZE_OF_PAYLOAD];
     while (true) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
-        if (recv(socket, rbuf, sizeof(rbuf), 0) < 0) {
+        if (recv(socket, rbuf, sizeof(rbuf), 0) == 0) {
             perror("receive error");
             return false;
         }
