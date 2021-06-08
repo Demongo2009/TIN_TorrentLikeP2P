@@ -31,7 +31,7 @@ void CliThread::runCliThread() {
                          "new <filePath> <resourceName>\n"
                          "list\n"
                          "find <resourceName>\n"
-                         "download <resourceName>\n"
+                         "download <resourceName> <filePathForDownload>\n"
                          "revoke <resourceName>\n"
                          "q (in order to quit)\n"
                          "Please input resourceNames shorter than " +  std::to_string(MAX_FILE_NAME_SIZE) + "\n";
@@ -41,7 +41,7 @@ void CliThread::runCliThread() {
 
     while(keepGoing){
         ClientCommand parsedCommand;
-        std::string userString, resourceName;
+        std::string filepath, resourceName;
         std::cout<<"CLI"<<std::endl;
         ss << line;
         for(std::string s; ss >>s;){
@@ -49,14 +49,14 @@ void CliThread::runCliThread() {
         }
 
         bool foundCommand= true;
-        parsedCommand = parseCommand(vecWord, userString, resourceName, foundCommand);
+        parsedCommand = parseCommand(vecWord, filepath, resourceName, foundCommand);
 
         if(foundCommand){
             switch (parsedCommand) {
                 case ADD_NEW_RESOURCE:
                     std::string password = getUserPassword();
 
-                    handleClientAddResource(resourceName, userString,password);
+                    handleClientAddResource(resourceName, filepath,password);
                     break;
                 case LIST_AVAILABLE_RESOURCES:
                     handleClientListResources();
@@ -65,7 +65,7 @@ void CliThread::runCliThread() {
                     handleClientFindResource(resourceName);
                     break;
                 case DOWNLOAD_RESOURCE:
-                    handleDownloadResource(resourceName, userString);
+                    handleDownloadResource(resourceName, filepath);
                     break;
                 case REVOKE_RESOURCE:
                     std::string password = getUserPassword();
@@ -140,6 +140,13 @@ ClientCommand CliThread::parseCommand(std::vector<std::string> vecWord, std::str
 
         parseResourceName(vecWord, resourceName, foundCommand);
 
+        if(vecWord.size() > 2){
+            filepath = vecWord[2];
+        }else{
+            std::cout << "You must input download file path!\n";
+            foundCommand = false;
+            return parsedCommand;
+        }
 
     } else if(vecWord[0] == "revoke"){
         parsedCommand = REVOKE_RESOURCE;
