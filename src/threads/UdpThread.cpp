@@ -197,7 +197,7 @@ void UdpThread::broadcastLogout(){
 void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddress(sockaddr)][resource.resourceName] = resource;
+    sharedStructs.networkResources[convertAddressLong(sockaddr)][resource.resourceName] = resource;
     sharedStructs.networkResourcesMutex.unlock();
 
 }
@@ -205,21 +205,25 @@ void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) 
 void UdpThread::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-//    sharedStructs.networkResources[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
-    sharedStructs.networkResources[convertAddress(sockaddr)].erase(resource.resourceName);
+    for(auto& resources: sharedStructs.networkResources){
+        auto it = resources.second.find(resource.resourceName);
+        if( it != resources.second.end()){
+            resources.second.erase(resource.resourceName);
+        }
+    }
     sharedStructs.networkResourcesMutex.unlock();
 }
 
 void UdpThread::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddress(sockaddr)].erase(resource.resourceName);
+    sharedStructs.networkResources[convertAddressLong(sockaddr)].erase(resource.resourceName);
     sharedStructs.networkResourcesMutex.unlock();
 }
 
 void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddress(sockaddr)] = std::map<std::string, ResourceInfo>();
+    sharedStructs.networkResources[convertAddressLong(sockaddr)] = std::map<std::string, ResourceInfo>();
     sharedStructs.networkResourcesMutex.unlock();
     sendMyState(sockaddr);
 }
@@ -230,17 +234,17 @@ void UdpThread::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(message);
     sharedStructs.networkResourcesMutex.lock();
     if( resources.empty() ){
-        sharedStructs.networkResources[convertAddress(sockaddr)] = std::map<std::string, ResourceInfo>();
+        sharedStructs.networkResources[convertAddressLong(sockaddr)] = std::map<std::string, ResourceInfo>();
     }
     for(const auto & r : resources){
-        sharedStructs.networkResources[convertAddress(sockaddr)][r.resourceName] = r;
+        sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
     }
     sharedStructs.networkResourcesMutex.unlock();
 }
 
 void UdpThread::handleNodeLeftNetwork(sockaddr_in sockaddr) {
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.erase(convertAddress(sockaddr));
+    sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
     sharedStructs.networkResourcesMutex.unlock();
 }
 

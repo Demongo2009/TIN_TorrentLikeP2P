@@ -222,8 +222,8 @@ void CliThread::handleClientListResources() {
     sharedStructs.networkResourcesMutex.lock();
     struct in_addr addr{};
     for(const auto& [peerAddress, resources] : sharedStructs.networkResources){
-        addr.s_addr = peerAddress.first;
-        std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
+        addr.s_addr = peerAddress;
+        std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr) <<std::endl;
         for(const auto& it: resources){
             std::cout<< "NAME: "<<it.first<< " SIZE: "<<it.second.sizeInBytes<<std::endl;
         }
@@ -244,8 +244,8 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
     for(auto& [peerAddress, resources]: sharedStructs.networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
-            addr.s_addr = peerAddress.first;
-            std::cout<< "NETWORK RESOURCE OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
+            addr.s_addr = peerAddress;
+            std::cout<< "NETWORK RESOURCE OF PEER: "<<inet_ntoa(addr) <<std::endl;
             std::cout<<"NAME: "<< resourceName<< " SIZE: " << it->second.sizeInBytes << std::endl;
         }
     }
@@ -274,8 +274,8 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
-            addr.sin_addr.s_addr = peerAddress.first;
-            addr.sin_port = peerAddress.second;
+            addr.sin_addr.s_addr = peerAddress;
+            addr.sin_port = ntohs(5555);
             addr.sin_family = AF_INET;
             peersPossessingResource.emplace_back(addr);
             fileSize = it->second.sizeInBytes;

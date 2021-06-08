@@ -84,7 +84,7 @@ int TcpThread::acceptClient() {
 void TcpThread::receive(int socket){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) == 0) {
+    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) <= 0) {
         perror("receive error");
         if(connectedClients.find(socket)!= connectedClients.end())
             connectedClients.erase(socket);
@@ -223,6 +223,7 @@ void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr)
     sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    std::cout<<"sending"<<std::endl;
     for(const auto& [resourceName, resource] : sharedStructs.localResources){
         if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
@@ -247,7 +248,7 @@ void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr)
     }
 
     sendHeader(socket, SYNC_END);
-
+    std::cout<<"sent"<<std::endl;
 }
 
 void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
@@ -255,7 +256,7 @@ void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
     for(auto& it: connectedClients){
         std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"issync "<<htons(it.second.address.sin_port)<<std::endl;
     }
-    sharedStructs.networkResources.erase(convertAddress(sockaddr));
+    sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
     sharedStructs.networkResourcesMutex.unlock();
 }
 
@@ -270,9 +271,11 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
     char rbuf[MAX_MESSAGE_SIZE];
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
+    std::cout<<"receiving"<<std::endl;
     while (true) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
-        if (recv(socket, rbuf, sizeof(rbuf), 0) == 0) {
+        if (recv(socket, rbuf, sizeof(rbuf), 0) <= 0) {
+            std::cout<<"recverror"<<std::endl;
             perror("receive error");
             return false;
         }
@@ -288,7 +291,7 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
             sharedStructs.networkResourcesMutex.lock();
             for(const auto & r : resources){
                 std::cout<<"reveivesync"<<std::endl;
-                sharedStructs.networkResources[convertAddress(sockaddr)][r.resourceName] = r;
+                sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
             }
             sharedStructs.networkResourcesMutex.unlock();
         } else if(std::stoi(header) == SYNC_END){

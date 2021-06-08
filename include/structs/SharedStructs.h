@@ -11,7 +11,7 @@
 
 struct SharedStructs{
     std::map<std::string , ResourceInfo> localResources;
-    std::map<std::pair<unsigned long, unsigned short>,std::map<std::string, ResourceInfo> > networkResources;
+    std::map<unsigned long,std::map<std::string, ResourceInfo> > networkResources;
     std::mutex localResourcesMutex;
     std::mutex networkResourcesMutex;
     std::map<std::string, std::string> filepaths;

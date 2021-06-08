@@ -16,6 +16,10 @@ std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
     return std::make_pair(address.sin_addr.s_addr, address.sin_port);
 }
 
+unsigned long convertAddressLong(sockaddr_in address){
+    return address.sin_addr.s_addr;
+}
+
 std::string getMyAddress(int socket){
     struct ifaddrs *ifap, *ifa;
     std::string addr;
