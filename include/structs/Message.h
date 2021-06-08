@@ -110,12 +110,16 @@ struct ChunkTransfer{
     TcpMessageCode header;
     unsigned int index;
     char payload[CHUNK_SIZE];
-    ChunkTransfer( TcpMessageCode header, unsigned int index, char* payload): header(header), index(index){ memcpy(this->payload, payload,
-                                                                                                                   strlen(payload)); }
+    ChunkTransfer( TcpMessageCode header, unsigned int index, char* payload): header(header), index(index){
+        memcpy(this->payload, payload, strlen(payload));
+        strncpy(this->payload, payload, strlen(payload) );
+        this->payload[strlen(payload)] = '\0';
+    }
     static ChunkTransfer deserializeChunkTransfer(const char *message) {
         TcpMessageCode header;
         unsigned int index;
         char payload[(CHUNK_SIZE) + 1];
+        memset(payload, 0, sizeof payload);
         unsigned short charIndex=0;
         char currCharacter=message[charIndex];
 
@@ -131,9 +135,10 @@ struct ChunkTransfer{
             currCharacter=message[++charIndex];
         }
         ++charIndex;
+        std::cout<<" strlen: "<<strlen(message) - charIndex <<"message :" << message + charIndex <<std::endl;
         strncpy( payload, message + charIndex, strlen(message) - charIndex );
         payload[strlen(message) - charIndex] = '\0';
-
+        std::cout<<"po skopiowaniu "<< payload<<std::endl;
         return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoi(currentIndex), payload);
     }
 };

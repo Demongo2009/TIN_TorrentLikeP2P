@@ -378,7 +378,7 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
             exit(EXIT_FAILURE);
         }
         ChunkTransfer message = ChunkTransfer::deserializeChunkTransfer(rbuf);
-        std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<<std::endl;
+        std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< "\n\n\n zdeserializowanyrbuf"<<rbuf<< std::endl;
 //        std::cout<<" rbuf "<< rbuf<<std::endl;
 //        memset(header, 0, HEADER_SIZE);
 //        snprintf(header, HEADER_SIZE, "%s", rbuf);
