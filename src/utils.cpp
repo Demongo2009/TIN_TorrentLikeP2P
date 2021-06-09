@@ -9,7 +9,6 @@
 #include "../include/utils.h"
 void errno_abort(const std::string &header){
     perror(header.c_str());
-//    exit(EXIT_FAILURE);
 }
 
 std::pair<unsigned long, unsigned short> convertAddress(sockaddr_in address){
@@ -41,7 +40,5 @@ std::string getMyAddress(int socket){
     memcpy(ifr.ifr_name, ethernetInterfaceName.c_str(), IFNAMSIZ-1);
     ioctl(socket, SIOCGIFADDR, &ifr);
     addr = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
-    printf("eiface is: %s\n",ethernetInterfaceName.c_str());
-    printf("System IP Address is: %s\n",addr.c_str());
     return addr;
 }

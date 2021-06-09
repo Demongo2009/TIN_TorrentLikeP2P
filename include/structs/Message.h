@@ -28,7 +28,7 @@ enum UdpMessageCode {
     NODE_DELETED_RESOURCE=111,          // resourceName
     NEW_NODE_IN_NETWORK=120,            // EMPTY
     STATE_OF_NODE=121,                  // tablica krotek: (resourceName, revokePassword, sizeInBytes)
-    NODE_LEFT_NETWORK=130,              // EMPTY - w sprawku napisalem ze przesyla to co miał, ale to w zasadzie niepotrzebne
+    NODE_LEFT_NETWORK=130,              // EMPTY
 };
 
 enum ClientCommand {
@@ -41,14 +41,8 @@ enum ClientCommand {
 };
 
 
-/*
- *  TODO:
- *      1.nie wiem czy rozgraniczenie pomiedzy
- *      tcp i udp jest potrzebne, chyba nie, ale w ten sposób ładnie to wygląda.
- *      .
- *      2.podczas wysylania/odbierania kazdego komunikatu trzeba bedzie sprwdzac
- *      kod a potem w zalenosci od niego odpowienio serializowac/deserialziowac.
-*/
+
+
  struct DemandChunkMessage {
     std::string resourceName;
     std::vector<unsigned long> chunkIndices;
@@ -59,7 +53,6 @@ enum ClientCommand {
                             chunkIndices(std::move(chunkIndices)) {}
 
      static DemandChunkMessage deserializeChunkMessage(const char *message) {
-         //zakladam, ze tutaj struktura jest "name;index1;index2;...indexn;000..."
          std::string name;
          std::vector<unsigned long> indices;
 
@@ -114,7 +107,6 @@ struct ChunkTransfer{
     unsigned long index;
     char payload[CHUNK_SIZE + 1];
     ChunkTransfer( TcpMessageCode header, unsigned long index, const char* payload): header(header), index(index){
-//        memcpy(this->payload, payload, payloadSize);
         strncpy(this->payload, payload, strlen(payload) );
         this->payload[strlen(payload)] = '\0';
 

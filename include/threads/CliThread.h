@@ -65,9 +65,6 @@ private:
     void downloadChunksFromPeer(sockaddr_in, const std::vector<int> &chunksIndices, const std::string& resourceName, const std::string &filepath);
 
     void receiveChunks(int sock, int chunksCount, const std::string &filepath);
-//
-//    void reserveFile(int chunksCount, const std::string& filepath);
-//    static void writeFile(const char *payload, unsigned int size, const std::string &filepath);
 
     void downloadResourceJob(const std::string &resource, const std::string &filepath);
 };

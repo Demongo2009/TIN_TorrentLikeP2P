@@ -98,8 +98,6 @@ struct ResourceInfo {
             charIndex++;
         }
 
-        // troche pozno jest kiedy to pisze ale czy powinienem sprawdzac dlugosc tego, co dostaje?
-//    czy to nie jest zapewnione w zaden sposob wyzej? Jezeli tak to najmocniej przepraszam, mozna to wywalic
         if(charIndex > MAX_MESSAGE_SIZE)
             throw std::runtime_error("message exceeded maximum lenght!");
 

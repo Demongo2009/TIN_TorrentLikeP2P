@@ -19,13 +19,6 @@ void TorrentClient::run() {
     tcpObj->terminate();
     udpObj->terminate();
 
-
-    /**
-     * 1.init struktur
-     * 2.pthread_create(runServerThread)
-     * 3.sleep(1sec)? - zeby poczekac chwilkę żebyśmy zdazyli sfetchowac stan sieci, mozemy to tez w wątku klienta przy czym wysietlimy jakas informacje typu "sekunda... inicjlaizacja węzła"
-     * 4.phread_creat(runCliThread)
-     */
 }
 
 void TorrentClient::signalHandler() {

@@ -11,4 +11,3 @@ ADD_EXECUTABLE(tin-p2p-torrents $<TARGET_OBJECTS:torrents-objects> main.cpp)
 
 TARGET_LINK_LIBRARIES(tin-p2p-torrents pthread)
 
-
