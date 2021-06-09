@@ -204,15 +204,12 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         } else {
             std::cout<<"ile: "<<fileSize - offset << std::endl;
             ifs.read(chunk, fileSize - offset);
-//            chunk[fileSize - offset] = '\0';
+            chunk[fileSize - offset] = '\0';
             nToWrite = fileSize - offset;
         }
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%lu;", CHUNK_TRANSFER, index);
-//        std::cout<<"sbuf przed"<<sbuf<<"ntowrite"<<nToWrite<<std::endl;
         memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
-//        std::cout<<"sbuf po: "<< sbuf<<std::endl;
-//        std::cout<<"chunk"<<chunk<<std::endl;
         if (send(socket, sbuf, MAX_MESSAGE_SIZE, 0) < 0) {
             errno_abort("send chunk");
         }

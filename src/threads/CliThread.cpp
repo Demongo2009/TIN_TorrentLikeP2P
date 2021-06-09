@@ -384,7 +384,6 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
-    char chunk[CHUNK_SIZE];
     unsigned long long fileSize;
     for(int i = 0; i < chunksCount; ++i) {
         std::cout<< "przed memset "<<std::endl;
