@@ -3,8 +3,8 @@
 
 #define MAX_MESSAGE_SIZE 4096
 #define HEADER_SIZE 4
-#define MAX_SIZE_OF_PAYLOAD MAX_MESSAGE_SIZE-HEADER_SIZE
-#define CHUNK_SIZE MAX_SIZE_OF_PAYLOAD-3
+#define MAX_SIZE_OF_PAYLOAD (MAX_MESSAGE_SIZE-HEADER_SIZE)
+#define CHUNK_SIZE (MAX_SIZE_OF_PAYLOAD-3)
 
 #include <vector>
 #include <string>
@@ -49,17 +49,17 @@ enum ClientCommand {
 */
  struct DemandChunkMessage {
     std::string resourceName;
-    std::vector<unsigned int> chunkIndices;
+    std::vector<unsigned long> chunkIndices;
         //konstruktor domyslny
-    DemandChunkMessage(std::string resourceName="",
-                       std::vector<unsigned int> chunkIndices={}):
+    explicit DemandChunkMessage(std::string resourceName="",
+                       std::vector<unsigned long> chunkIndices={}):
                             resourceName(std::move(resourceName)),
                             chunkIndices(std::move(chunkIndices)) {}
 
      static DemandChunkMessage deserializeChunkMessage(const char *message) {
          //zakladam, ze tutaj struktura jest "name;index1;index2;...indexn;000..."
          std::string name;
-         std::vector<unsigned int> indices;
+         std::vector<unsigned long> indices;
 
          unsigned short charIndex=0;
          char currCharacter=message[charIndex];
@@ -82,7 +82,7 @@ enum ClientCommand {
              } else if(currCharacter==';'){
                  //mamy nowy index - wrzucamy do wektora i resetujemy stringa zbierajacego cyfry
                  try {
-                     indices.push_back(std::stoi(currentIndex));
+                     indices.push_back(std::stoul(currentIndex));
                  }
                  catch(std::exception& exception){
                      throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
@@ -96,7 +96,7 @@ enum ClientCommand {
          }
          if(!std::empty(currentIndex)){
              try {
-                 indices.push_back(std::stoi(currentIndex));
+                 indices.push_back(std::stoul(currentIndex));
              }
              catch(std::exception& exception){
                  throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
@@ -109,16 +109,16 @@ enum ClientCommand {
 };
 struct ChunkTransfer{
     TcpMessageCode header;
-    unsigned int index;
+    unsigned long index;
     char payload[CHUNK_SIZE];
-    ChunkTransfer( TcpMessageCode header, unsigned int index, char* payload): header(header), index(index){
+    ChunkTransfer( TcpMessageCode header, unsigned long index, char* payload): header(header), index(index){
         memcpy(this->payload, payload, strlen(payload));
         strncpy(this->payload, payload, strlen(payload) );
         this->payload[strlen(payload)] = '\0';
     }
     static ChunkTransfer deserializeChunkTransfer(const char *message) {
         TcpMessageCode header;
-        unsigned int index;
+        unsigned long index;
         char payload[(CHUNK_SIZE) + 1];
         memset(payload, 0, sizeof payload);
         unsigned short charIndex=0;
@@ -138,7 +138,7 @@ struct ChunkTransfer{
         ++charIndex;
         strncpy( payload, message + charIndex, strlen(message) - charIndex );
         payload[strlen(message) - charIndex] = '\0';
-        return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoi(currentIndex), payload);
+        return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex), payload);
     }
 };
 

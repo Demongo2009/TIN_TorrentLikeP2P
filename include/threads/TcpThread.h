@@ -18,7 +18,7 @@
 class TcpThread{
 
 public:
-    TcpThread(SharedStructs& structs) : sharedStructs(structs){ keepGoing = true; }
+    explicit TcpThread(SharedStructs& structs) : sharedStructs(structs){ keepGoing = true; }
 
     static void start(TcpThread* tcpObj){
     	tcpObj->runTcpServerThread();
@@ -27,7 +27,7 @@ public:
 
     bool receiveSync(int socket, std::optional<struct sockaddr_in> sockaddr);
 
-    void sendSync(int socket, std::optional<struct sockaddr_in> sockaddr);
+    void sendSync(int socket);
     void terminate();
 
 	void setBarrier(pthread_barrier_t *ptr);

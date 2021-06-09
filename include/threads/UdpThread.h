@@ -17,7 +17,7 @@
 
 class UdpThread{
 public:
-    UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
+    explicit UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
 
 	static void start(UdpThread* udpObj){
     	udpObj->runUdpServerThread();
@@ -53,7 +53,7 @@ private:
 
 //functions handling broadcasted messages - UDP server
     void handleNewResourceAvailable(char *message, sockaddr_in sockaddr);
-    void handleOwnerRevokedResource(char *message, sockaddr_in sockaddr);
+    void handleOwnerRevokedResource(char *message);
     void handleNodeDeletedResource(char *message, sockaddr_in sockaddr);
 
     void handleStateOfNode(char *message, sockaddr_in sockaddr);

@@ -1,6 +1,4 @@
 #include <thread>
-#include <iostream>
-#include <sstream>
 #include <fstream>
 #include "../../include/threads/TorrentClient.h"
 #include <pthread.h>
@@ -8,8 +6,7 @@
 void TorrentClient::run() {
 
 	pthread_barrier_t barrier;
-	const pthread_barrierattr_t *barrierattr;
-	int success = pthread_barrier_init(&barrier, nullptr,3);
+	pthread_barrier_init(&barrier, nullptr,3);
 	udpObj->setBarrier(&barrier);
 	tcpObj->setBarrier(&barrier);
 	cliObj->setBarrier(&barrier);

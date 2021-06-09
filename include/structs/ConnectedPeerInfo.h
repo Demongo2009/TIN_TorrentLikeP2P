@@ -6,23 +6,17 @@
 #include <netinet/in.h>
 
 struct ConnectedPeerInfo {
-    ConnectedPeerInfo() {
-
-    }
 
     ConnectedPeerInfo(const ConnectedPeerInfo& other){
         address = other.address;
         isSync = other.isSync;
-        threadsCount = other.threadsCount;
     }
 
     struct sockaddr_in address;
     bool isSync;
-    bool isFinished;
-    unsigned char threadsCount;
-    ConnectedPeerInfo(struct sockaddr_in address) : address(address) {
+
+    explicit ConnectedPeerInfo(struct sockaddr_in address) : address(address) {
         isSync = false;
-        threadsCount = 0;
     }
 };
 

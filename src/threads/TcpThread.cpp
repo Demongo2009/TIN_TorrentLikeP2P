@@ -32,8 +32,8 @@ void TcpThread::initTcp(){
 
     if (returnCode == -1) {
         printf("BIND ERROR: %s\n", strerror(errno));
-        close(tcpSocket);
-        exit(1);
+//        close(tcpSocket);
+//        exit(1);
     }
 
     returnCode = listen(tcpSocket, 16);
@@ -128,7 +128,7 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
         std::cout<<"handletcp"<<std::endl;
         if(!connectedClients.at(socket).isSync){
             std::cout<<"syncing"<<std::endl;
-            sendSync(socket, std::nullopt);
+            sendSync(socket);
             if(receiveSync(socket, std::nullopt)) {
                 connectedClients.at(socket).isSync = true;
             } else{
@@ -202,7 +202,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
             chunk[fileSize - offset] = '\0';
         }
         memset(sbuf, 0, sizeof(sbuf));
-        snprintf(sbuf, sizeof(sbuf), "%d;%d;%s", CHUNK_TRANSFER, index, chunk);
+        snprintf(sbuf, sizeof(sbuf), "%d;%lu;%s", CHUNK_TRANSFER, index, chunk);
         std::cout<<"\n\n\n\n sbuf: "<< sbuf<<std::endl;
         if (send(socket, sbuf, sizeof sbuf, 0) < 0) {
             errno_abort("send chunk");
@@ -233,10 +233,11 @@ bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
     if(std::stoi(header) == code){
         return true;
     }
+    std::cout<<"bad receive header"<<std::endl;
     return false;
 }
 
-void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr){
+void TcpThread::sendSync(int socket){
     std::stringstream ss;
     sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};

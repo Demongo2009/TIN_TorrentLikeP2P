@@ -6,8 +6,6 @@
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
-#include <sstream>
-#include <fstream>
 #include <cmath>
 #include <cassert>
 #include "../../include/utils.h"
@@ -91,8 +89,8 @@ void CliThread::terminate(){
     for(auto& it: openSockets){
         close(it);
     }
-    for(auto & it: ongoingDowloadingFilepaths){
-        remove(it.c_str());
+    for(auto & it: ongoingDownloadingFiles){
+        remove(it.first.c_str());
     }
     std::cout<<"CLITERM"<<std::endl;
     keepGoing = false;
@@ -270,7 +268,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     sharedStructs.networkResourcesMutex.lock();
     struct sockaddr_in addr{};
     std::vector<struct sockaddr_in> peersPossessingResource;
-    unsigned int fileSize;
+    unsigned long long fileSize;
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
@@ -297,14 +295,16 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     }
     std::vector<std::thread> threads;
     threads.reserve(chunkIndices.size());
-    ongoingDowloadingFilepaths.insert(filepath);
+    SynchronizedFile file = SynchronizedFile(filepath);
+    file.reserveFile(fileSize);
+    ongoingDownloadingFiles.insert(std::make_pair(filepath, file));
     for(int i = 0; i < chunkIndices.size(); ++i){
         threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath);
     }
     for(auto & thread: threads){
         thread.join();
     }
-    ongoingDowloadingFilepaths.erase(filepath);
+    ongoingDownloadingFiles.erase(filepath);
     ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize);
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
@@ -337,7 +337,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             ss.clear();
             if(first){
                 tcpObj->receiveSync(sock, sockaddr);
-                tcpObj->sendSync(sock, sockaddr);
+                tcpObj->sendSync(sock);
                 first = false;
             }
             receiveChunks(sock, chunksCount, filepath);
@@ -357,31 +357,18 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     }
     if(first){
         tcpObj->receiveSync(sock,sockaddr);
-        tcpObj->sendSync(sock, sockaddr);
+        tcpObj->sendSync(sock);
         std::cout<<"poszlo"<<std::endl;
     }
-    unsigned int size = sharedStructs.networkResources[sockaddr.sin_addr.s_addr].at(resourceName).sizeInBytes;
-    reserveFile(size, filepath);
+    unsigned long long size = sharedStructs.networkResources[sockaddr.sin_addr.s_addr].at(resourceName).sizeInBytes;
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
     openSockets.erase(sock);
 }
 
-void CliThread::reserveFile(int fileSize, const std::string& filepath){
-    FILE * pFile;
-    char buffer[] = {"1"};
-    pFile = std::fopen (filepath.c_str(), "wb");
-    for(int i = 0; i < fileSize; ++i)
-        std::fwrite (buffer , sizeof(char), 1, pFile);
-    std::fclose (pFile);
-}
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
-//    char header[HEADER_SIZE];
-//    char indexBuffer[sizeof (int)];
-//    char payload[MAX_SIZE_OF_PAYLOAD];
-//    int index;
     for(int i = 0; i < chunksCount; ++i) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
         if (recv(sock, rbuf, sizeof(rbuf), 0) < 0) {
@@ -390,35 +377,14 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
         }
         ChunkTransfer message = ChunkTransfer::deserializeChunkTransfer(rbuf);
         std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
-//        std::cout<<" rbuf "<< rbuf<<std::endl;
-//        memset(header, 0, HEADER_SIZE);
-//        snprintf(header, HEADER_SIZE, "%s", rbuf);
-//        memset(indexBuffer, 0, sizeof indexBuffer);
-//        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header );
-//
-//        std::cout<<"indexbuffer "<<indexBuffer<<" header "<<header<< " rbuf "<< rbuf <<std::endl;
-
         if (message.header == CHUNK_TRANSFER) {
-//            memset(message.payload, 0, CHUNK_SIZE);
-//            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE)*2);
-//            index = std::stoi(indexBuffer);
-            writeFile(message.payload, message.index, filepath);
+            ongoingDownloadingFiles.at(filepath).write(message.payload, message.index);
+
         } else {
-            //invalid chunk request
             throw std::runtime_error("receive chunks bad header");
         }
 
     }
-}
-
-
-void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
-    std::ofstream ofs (filepath, std::ios::in | std::ofstream::out | std::ofstream::binary);
-    int c = CHUNK_SIZE;
-    long offset = index * c;
-    ofs.seekp(offset, std::ios::beg);
-    ofs<<payload;
-    ofs.close();
 }
 
 std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, unsigned int fileSize){
@@ -426,7 +392,6 @@ std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, un
     int c = CHUNK_SIZE;
     int f = fileSize;
     int chunks = ceil((double) f / c );
-//    int chunksPerPeer = ceil((double) chunks / peersCount );
     for(int i = 0; i < peersCount && i < chunks; ++i){
         chunkIndices.emplace_back(std::vector<int>());
     }
@@ -450,7 +415,6 @@ void CliThread::handleRevokeResource(const std::string& resourceName, const std:
         std::cout<<"You are not an original owner of this resource"<<std::endl;
         return;
     }
-//    localResources.at(resourceName).isRevoked = true;
     sharedStructs.localResources.erase(resourceName);
     sharedStructs.localResourcesMutex.unlock();
     sharedStructs.networkResourcesMutex.lock();

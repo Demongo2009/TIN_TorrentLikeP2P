@@ -23,7 +23,7 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
             handleNewResourceAvailable(payload, sockaddr);
             break;
         case OWNER_REVOKED_RESOURCE:
-            handleOwnerRevokedResource(payload, sockaddr);
+            handleOwnerRevokedResource(payload);
             break;
         case NODE_DELETED_RESOURCE:
             handleNodeDeletedResource(payload, sockaddr);
@@ -154,7 +154,7 @@ void UdpThread::broadcastNewFile(const ResourceInfo& resource)
 {
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(sbuf, sizeof(sbuf),
-             "%s;%lu;%d",
+             "%s;%lu;%llu",
              resource.resourceName.c_str(),
              resource.revokeHash,
              resource.sizeInBytes);
@@ -202,7 +202,7 @@ void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) 
 
 }
 
-void UdpThread::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
+void UdpThread::handleOwnerRevokedResource(char *message) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
     for(auto& resources: sharedStructs.networkResources){
