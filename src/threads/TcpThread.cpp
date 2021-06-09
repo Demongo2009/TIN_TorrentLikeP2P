@@ -54,7 +54,6 @@ void TcpThread::terminate(){
     for(auto& it: connectedClients){
         close(it.first);
     }
-    std::terminate();
 }
 
 int TcpThread::acceptClient() {
@@ -64,7 +63,6 @@ int TcpThread::acceptClient() {
     std::cout<<"before accept"<< tcpSocket << " " << size <<'\n';
     int clientSocket = accept(tcpSocket, (struct sockaddr *) &clientAddr, &size);
 
-    printf("ACCEPTED...\n");
     if (clientSocket == -1){
         printf("ACCEPT ERROR: %s\n", strerror(errno));
         return -1;

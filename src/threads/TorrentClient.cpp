@@ -14,14 +14,21 @@ void TorrentClient::run() {
 	tcpObj->setBarrier(&barrier);
 	cliObj->setBarrier(&barrier);
 
+    try {
+        std::thread udpThread(UdpThread::start, udpObj.get());
+        std::thread tcpThread(TcpThread::start, tcpObj.get());
+        std::thread cliThread(CliThread::start, cliObj.get());
+        cliThread.join();
+        tcpObj->terminate();
+        udpObj->terminate();
+    }catch (std::exception& e){
+        std::cout<<"catch"<<e.what()<<std::endl;
+        cliObj->terminate();
+        tcpObj->terminate();
+        udpObj->terminate();
+    }
 
-    std::thread udpThread(UdpThread::start, udpObj);
-    std::thread tcpThread(TcpThread::start, tcpObj);
-    std::thread cliThread(CliThread::start, cliObj);
 
-    cliThread.join();
-    tcpObj->terminate();
-    udpObj->terminate();
     /**
      * 1.init struktur
      * 2.pthread_create(runServerThread)

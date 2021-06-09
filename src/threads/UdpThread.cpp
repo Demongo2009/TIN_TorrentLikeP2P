@@ -4,6 +4,8 @@
 #include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include <arpa/inet.h>
 #include <cstring>
 #include <iostream>
@@ -11,6 +13,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <ifaddrs.h>
 #include <vector>
 #include "../../include/utils.h"
 #include "../../include/threads/UdpThread.h"
@@ -40,6 +43,7 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
 }
 
 void UdpThread::runUdpServerThread() {
+
     initUdp();
 	pthread_barrier_wait(barrier);
     broadcastNewNode();
@@ -50,9 +54,9 @@ void UdpThread::runUdpServerThread() {
 
 void UdpThread::terminate(){
     keepGoing = false;
-    std::cout<<"UDPTERM"<<std::endl;
     broadcastLogout();
     close(udpSocket);
+    exit(0);
 }
 
 void UdpThread::receive(){
@@ -66,7 +70,7 @@ void UdpThread::receive(){
         perror("receive error");
         exit(EXIT_FAILURE);
     }
-
+    clientAddr.sin_port = (in_port_t) htons(port);
     printf("recv: %s\n", rbuf);
 
     char header[HEADER_SIZE+1];
@@ -75,11 +79,38 @@ void UdpThread::receive(){
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
     snprintf(header, HEADER_SIZE+1, "%s", rbuf);
     snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
+    std::string clientAddressString = inet_ntoa(clientAddr.sin_addr);
     std::cout<<"header: "<< header << " payload: " << payload << "\n";
-    if(!(inet_ntoa(clientAddr.sin_addr) == myAddress)){
+    std::cout<<"clientaddr: "<< clientAddressString << " port: " << htons (clientAddr.sin_port) << "\n";
+    if(clientAddressString != myAddress && clientAddressString != "127.0.0.1"){
         handleUdpMessage(header, payload, clientAddr);
     }
 
+}
+
+void UdpThread::getMyAddress(){
+    struct ifaddrs *ifap, *ifa;
+    char *addr;
+    std::string ethernetInterfaceName;
+    std::string ethernetInterfaceNameBegin = "e";
+    getifaddrs (&ifap);
+    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) {
+            if(strncmp(ifa->ifa_name, ethernetInterfaceNameBegin.c_str(), 1) == 0){
+                ethernetInterfaceName = ifa->ifa_name;
+                break;
+            }
+        }
+    }
+
+    freeifaddrs(ifap);
+    struct ifreq ifr;
+    ifr.ifr_addr.sa_family = AF_INET;
+    memcpy(ifr.ifr_name, ethernetInterfaceName.c_str(), IFNAMSIZ-1);
+    ioctl(udpSocket, SIOCGIFADDR, &ifr);
+    myAddress = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
+    printf("eiface is: %s\n",ethernetInterfaceName.c_str());
+    printf("System IP Address is: %s\n",myAddress.c_str());
 }
 
 void UdpThread::initUdp() {
@@ -88,6 +119,8 @@ void UdpThread::initUdp() {
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
+    getMyAddress();
+
     if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");
     }
@@ -219,6 +252,9 @@ void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
 void UdpThread::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(message);
     sharedStructs.networkResourcesMutex.lock();
+    if( resources.empty() ){
+        sharedStructs.networkResources[convertAddress(sockaddr)] = std::map<std::string, ResourceInfo>();
+    }
     for(const auto & r : resources){
         sharedStructs.networkResources[convertAddress(sockaddr)][r.resourceName] = r;
     }
@@ -241,6 +277,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
             snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
+            std::cout<<"sendmystateto: "<< inet_ntoa(newPeer.sin_addr) << " port: " << htons (newPeer.sin_port) << "\n";
             if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
                 errno_abort("send");
             }
@@ -254,7 +291,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
     memset(payload, 0 , sizeof(payload));
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
-
+    std::cout<<"sendmystateto: "<< inet_ntoa(newPeer.sin_addr) << " port: " << htons (newPeer.sin_port) << "\n";
     if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
         errno_abort("send");
     }

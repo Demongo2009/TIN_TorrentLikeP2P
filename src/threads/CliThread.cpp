@@ -10,9 +10,18 @@
 #include <fstream>
 #include <cmath>
 #include <cassert>
-#include <random>
 #include "../../include/utils.h"
 #include "../../include/threads/CliThread.h"
+
+std::string CliThread::getUserPassword(){
+    std::string prompt = "\nPlease input password:...\n";
+    std::cout << prompt;
+
+    std::string line;
+    std::getline(std::cin, line);
+    return line;
+}
+
 
 void CliThread::runCliThread() {
 	pthread_barrier_wait(barrier);
@@ -22,16 +31,13 @@ void CliThread::runCliThread() {
                          "new <filePath> <resourceName>\n"
                          "list\n"
                          "find <resourceName>\n"
-                         "download <resourceName>\n"
+                         "download <resourceName> <filePathForDownload>\n"
                          "revoke <resourceName>\n"
                          "q (in order to quit)\n"
                          "Please input resourceNames shorter than " +  std::to_string(MAX_FILE_NAME_SIZE) + "\n";
     std::cout << prompt;
     std::getline(std::cin, line);
     std::vector<std::string> vecWord;
-	std::string password ;
-
-	loadPassword(password);
 
     while(keepGoing){
         ClientCommand parsedCommand;
@@ -48,7 +54,9 @@ void CliThread::runCliThread() {
         if(foundCommand){
             switch (parsedCommand) {
                 case ADD_NEW_RESOURCE:
-                    handleClientAddResource(resourceName, filepath, password);
+                    std::string password = getUserPassword();
+
+                    handleClientAddResource(resourceName, filepath,password);
                     break;
                 case LIST_AVAILABLE_RESOURCES:
                     handleClientListResources();
@@ -60,13 +68,14 @@ void CliThread::runCliThread() {
                     handleDownloadResource(resourceName, filepath);
                     break;
                 case REVOKE_RESOURCE:
+                    std::string password = getUserPassword();
                     handleRevokeResource(resourceName, password);
                     break;
                 case EXIT:
 					// clean before quit?
 
 					keepGoing = false;
-					exit(0);
+                    exit(0);
             }
         }
 
@@ -131,6 +140,13 @@ ClientCommand CliThread::parseCommand(std::vector<std::string> vecWord, std::str
 
         parseResourceName(vecWord, resourceName, foundCommand);
 
+        if(vecWord.size() > 2){
+            filepath = vecWord[2];
+        }else{
+            std::cout << "You must input download file path!\n";
+            foundCommand = false;
+            return parsedCommand;
+        }
 
     } else if(vecWord[0] == "revoke"){
         parsedCommand = REVOKE_RESOURCE;
@@ -232,17 +248,13 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
 
 
 void CliThread::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
-	std::cout<<"handle\n";
-    std::thread downloadThread(CliThread::startDownloadResourceJob, this, resourceName, filepath);
-    downloadThread.join();
+    std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
+    downloadThread.detach();
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
-	std::cout<<"job\n";
     sharedStructs.localResourcesMutex.lock();
-	std::cout<<"job\n";
-
-	auto it = sharedStructs.localResources.find(resourceName);
+    auto it = sharedStructs.localResources.find(resourceName);
     if( it != sharedStructs.localResources.end()){
         std::cout<<"ALREADY HAVE THE RESOURCE "<< resourceName<< " PATH: " << sharedStructs.filepaths.at(resourceName) << std::endl;
         sharedStructs.localResourcesMutex.unlock();
@@ -250,13 +262,12 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     }
     sharedStructs.localResourcesMutex.unlock();
     sharedStructs.networkResourcesMutex.lock();
-    std::cout<<"1\n";
     struct sockaddr_in addr{};
     std::vector<struct sockaddr_in> peersPossessingResource;
     unsigned int fileSize;
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
-        if( it != sharedStructs.localResources.end()){
+        if( it != resources.end()){
             addr.sin_addr.s_addr = peerAddress.first;
             addr.sin_port = peerAddress.second;
             addr.sin_family = AF_INET;
@@ -264,9 +275,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
             fileSize = it->second.sizeInBytes;
         }
     }
-	std::cout<<"2\n";
-
-	sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.networkResourcesMutex.unlock();
     if(peersPossessingResource.empty()){
         std::cout<<"NONE IS IN POSSESSION OF THIS RESOURCE "<< resourceName<< std::endl;
         return;
@@ -276,17 +285,13 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     std::vector<std::thread> threads;
     threads.reserve(peersPossessingResource.size());
     ongoingDowloadingFilepaths.insert(filepath);
-	std::cout<<"3\n";
-
-	for(int i = 0; i < peersPossessingResource.size(); ++i){
+    for(int i = 0; i < peersPossessingResource.size(); ++i){
         threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], filepath);
     }
     for(auto & thread: threads){
         thread.join();
     }
-	std::cout<<"4\n";
-
-	ongoingDowloadingFilepaths.erase(filepath);
+    ongoingDowloadingFilepaths.erase(filepath);
     ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize);
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
@@ -395,8 +400,14 @@ std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, un
 void CliThread::handleRevokeResource(const std::string& resourceName, const std::string& userPassword) {
     sharedStructs.localResourcesMutex.lock();
     std::size_t hash = std::hash<std::string>{}(userPassword);
+    if(sharedStructs.localResources.find(resourceName) == sharedStructs.localResources.end()){
+        sharedStructs.localResourcesMutex.unlock();
+        std::cout<<"No such resource"<<std::endl;
+        return;
+    }
     if(sharedStructs.localResources.at(resourceName).revokeHash != hash ){
-        std::cout<<"YOU HAVE NO RIGHT SIR"<<std::endl;
+        sharedStructs.localResourcesMutex.unlock();
+        std::cout<<"You are not an original owner of this resource"<<std::endl;
         return;
     }
 //    localResources.at(resourceName).isRevoked = true;
@@ -408,18 +419,4 @@ void CliThread::handleRevokeResource(const std::string& resourceName, const std:
 
 void CliThread::setBarrier(pthread_barrier_t *ptr) {
 	barrier = ptr;
-}
-
-void CliThread::loadPassword(std::string &password) {
-	std::fstream f("./password.txt");
-
-	if(!f.good()){
-		std::default_random_engine gen;
-		std::uniform_int_distribution<int> distribution(1000000,9000000);
-		password = std::to_string(distribution(gen));
-		f << password;
-		return;
-	}
-
-	f >> password;
 }

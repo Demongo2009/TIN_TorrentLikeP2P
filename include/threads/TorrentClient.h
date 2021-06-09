@@ -1,6 +1,7 @@
 #ifndef TIN_TORRENTLIKEP2P_TORRENTCLIENT_H
 #define TIN_TORRENTLIKEP2P_TORRENTCLIENT_H
 
+#include <memory>
 #include "../../include/threads/UdpThread.h"
 #include "../../include/threads/TcpThread.h"
 #include "../../include/threads/CliThread.h"
@@ -8,18 +9,18 @@
 class TorrentClient {
 public:
     explicit TorrentClient(SharedStructs& structs){
-    	tcpObj = new TcpThread(structs);
-    	udpObj = new UdpThread(structs),
-    	cliObj = new CliThread(structs, tcpObj, udpObj);
+    	tcpObj = std::make_unique<TcpThread>(TcpThread(structs));
+    	udpObj = std::make_unique<UdpThread>(UdpThread(structs));
+    	cliObj = std::make_unique<CliThread>(CliThread(structs, tcpObj, udpObj));
     }
     void run();
 
     void signalHandler();
 private:
 
-    CliThread* cliObj;
-    TcpThread* tcpObj;
-    UdpThread* udpObj;
+    std::unique_ptr<CliThread> cliObj;
+    std::unique_ptr<TcpThread> tcpObj;
+    std::unique_ptr<UdpThread> udpObj;
 };
 
 

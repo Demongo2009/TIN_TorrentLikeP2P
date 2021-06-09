@@ -17,8 +17,8 @@ class CliThread{
 
 public:
 
-    CliThread(SharedStructs& structs, TcpThread* tcpThread, UdpThread* udpThread) : sharedStructs(structs), tcpObj(tcpThread),
-                                                                                    udpObj(udpThread){
+    CliThread(SharedStructs& structs, std::unique_ptr<TcpThread>& tcpThread, std::unique_ptr<UdpThread>& udpThread) :
+    sharedStructs(structs), tcpObj(tcpThread), udpObj(udpThread){
         keepGoing = true;
     }
 
@@ -33,17 +33,15 @@ public:
 
 private:
     SharedStructs& sharedStructs;
-    TcpThread* tcpObj;
-    UdpThread* udpObj;
+    std::unique_ptr<TcpThread>& tcpObj;
+    std::unique_ptr<UdpThread>& udpObj;
     std::set<int> openSockets;
     std::set<std::string> ongoingDowloadingFilepaths;
     bool keepGoing;
     const int MAX_FILE_NAME_SIZE = 256;
     pthread_barrier_t* barrier;
+    std::string CliThread::getUserPassword();
 
-	static void startDownloadResourceJob(CliThread* cliThread, const std::string &resource,const std::string& filepath){
-		cliThread->downloadResourceJob(resource,filepath);
-	}
 
     void handleClientAddResource(const std::string& resourceName, const std::string& resourcePath, const std::string& userPassword);
 
@@ -71,8 +69,6 @@ private:
     static void writeFile(const char *payload, unsigned int size, const std::string &filepath);
 
     void downloadResourceJob(const std::string &resource, const std::string &filepath);
-
-	void loadPassword(std::string &password);
 };
 
 #endif //TIN_TORRENTLIKEP2P_CLITHREAD_H
