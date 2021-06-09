@@ -1,26 +1,26 @@
 #ifndef TIN_TORRENTLIKEP2P_MESSAGE_H
 #define TIN_TORRENTLIKEP2P_MESSAGE_H
 
-#define MAX_MESSAGE_SIZE 4096
-#define HEADER_SIZE 3
-#define MAX_SIZE_OF_PAYLOAD MAX_MESSAGE_SIZE-HEADER_SIZE
-#define CHUNK_SIZE MAX_SIZE_OF_PAYLOAD-3
+#define MAX_MESSAGE_SIZE 1024
+#define HEADER_SIZE 4
+#define MAX_SIZE_OF_PAYLOAD (MAX_MESSAGE_SIZE-HEADER_SIZE)
+#define CHUNK_SIZE (MAX_SIZE_OF_PAYLOAD-16)
 
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <iostream>
+#include <cstring>
 
 //      NAZWA=KOD                       CO PRZESYLAMY
 enum TcpMessageCode {
-    DEMAND_CHUNK=140,                   // resourceName, indexOfChunk
+    DEMAND_CHUNK=140,                   // resourceName, vectof<indexOfChunk>
     MY_STATE_BEFORE_FILE_TRANSFER=141,   // tablica krotek: (resourceName, revokePassword, sizeInBytes)
-    CHUNK_TRANSFER=142,                 // indexOfChunk, offsetFromChunkStart, data
-    SYNC_END,
-    REQUEST_SYNC_END,
-    ERROR_AFTER_SYNCHRONIZATION=440,    // EMPTY
-    ERROR_WHILE_SENDING=540,            // EMPTY
-    ERROR_WHILE_RECEIVING=541,          // EMPTY
-    INVALID_CHUNK_REQUEST
+    CHUNK_TRANSFER=142,                 // indexOfChunk, data
+    SYNC_END = 143,
+    SYNC_OK = 144,
+    CHUNK_TRANSFER_OK = 145,
+    INVALID_CHUNK_REQUEST = 440
 };
 enum UdpMessageCode {
     NEW_RESOURCE_AVAILABLE=100,         // resourceName, revokePassword, sizeInBytes
@@ -51,17 +51,17 @@ enum ClientCommand {
 */
  struct DemandChunkMessage {
     std::string resourceName;
-    std::vector<unsigned int> chunkIndices;
+    std::vector<unsigned long> chunkIndices;
         //konstruktor domyslny
-    DemandChunkMessage(std::string resourceName="",
-                       std::vector<unsigned int> chunkIndices={}):
+    explicit DemandChunkMessage(std::string resourceName="",
+                       std::vector<unsigned long> chunkIndices={}):
                             resourceName(std::move(resourceName)),
                             chunkIndices(std::move(chunkIndices)) {}
 
      static DemandChunkMessage deserializeChunkMessage(const char *message) {
          //zakladam, ze tutaj struktura jest "name;index1;index2;...indexn;000..."
          std::string name;
-         std::vector<unsigned int> indices;
+         std::vector<unsigned long> indices;
 
          unsigned short charIndex=0;
          char currCharacter=message[charIndex];
@@ -84,7 +84,7 @@ enum ClientCommand {
              } else if(currCharacter==';'){
                  //mamy nowy index - wrzucamy do wektora i resetujemy stringa zbierajacego cyfry
                  try {
-                     indices.push_back(std::stoi(currentIndex));
+                     indices.push_back(std::stoul(currentIndex));
                  }
                  catch(std::exception& exception){
                      throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
@@ -98,7 +98,7 @@ enum ClientCommand {
          }
          if(!std::empty(currentIndex)){
              try {
-                 indices.push_back(std::stoi(currentIndex));
+                 indices.push_back(std::stoul(currentIndex));
              }
              catch(std::exception& exception){
                  throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
@@ -109,7 +109,43 @@ enum ClientCommand {
      }
 
 };
+struct ChunkTransfer{
+    TcpMessageCode header;
+    unsigned long index;
+    char payload[CHUNK_SIZE + 1];
+    ChunkTransfer( TcpMessageCode header, unsigned long index, const char* payload): header(header), index(index){
+//        memcpy(this->payload, payload, payloadSize);
+        strncpy(this->payload, payload, strlen(payload) );
+        this->payload[strlen(payload)] = '\0';
 
+    }
+    static std::optional<ChunkTransfer> deserializeChunkTransfer(const char *message, unsigned long long fileSize) {
+        TcpMessageCode header;
+        unsigned long index;
+        char payload[(CHUNK_SIZE) + 1];
+        memset(payload, 0, sizeof payload);
+        unsigned short charIndex=0;
+        char currCharacter=message[charIndex];
+
+
+        std::string currentIndex, headerStr;
+        while (isdigit(currCharacter)){
+            headerStr+=currCharacter;
+            currCharacter=message[++charIndex];
+        }
+        if( std::stoi(headerStr) != CHUNK_TRANSFER )
+            return std::nullopt;
+        currCharacter=message[++charIndex];
+        while (isdigit(currCharacter)){
+            currentIndex+=currCharacter;
+            currCharacter=message[++charIndex];
+        }
+        ++charIndex;
+        strncpy( payload, message + charIndex, strlen(message) - charIndex );
+        payload[strlen(message) - charIndex] = '\0';
+        return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex), payload);
+    }
+};
 
 
 

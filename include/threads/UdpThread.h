@@ -17,7 +17,7 @@
 
 class UdpThread{
 public:
-    UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
+    explicit UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
 
 	static void start(UdpThread* udpObj){
     	udpObj->runUdpServerThread();
@@ -26,7 +26,7 @@ public:
 
     void broadcastNewFile(const ResourceInfo& resource);
 
-    void broadcastRevokeFile(const ResourceInfo& resource);
+    void broadcastRevokeFile(const std::string& resource);
     void terminate();
 
 	void setBarrier(pthread_barrier_t *ptr);
@@ -53,7 +53,7 @@ private:
 
 //functions handling broadcasted messages - UDP server
     void handleNewResourceAvailable(char *message, sockaddr_in sockaddr);
-    void handleOwnerRevokedResource(char *message, sockaddr_in sockaddr);
+    void handleOwnerRevokedResource(char *message);
     void handleNodeDeletedResource(char *message, sockaddr_in sockaddr);
 
     void handleStateOfNode(char *message, sockaddr_in sockaddr);
@@ -63,7 +63,6 @@ private:
     void handleNewNodeInNetwork(sockaddr_in sockaddr);
 
     void sendMyState(sockaddr_in in);
-    void getMyAddress();
 };
 
 #endif //TIN_TORRENTLIKEP2P_UDPTHREAD_H

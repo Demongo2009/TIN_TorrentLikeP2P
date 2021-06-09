@@ -7,11 +7,11 @@
 #include <sstream>
 struct ResourceInfo {
     std::string resourceName;
-    unsigned int sizeInBytes;
+    unsigned long long sizeInBytes;
     std::size_t revokeHash;
     bool isRevoked;
-    ResourceInfo(std::string resourceName="",
-                 unsigned int sizeInBytes=0,
+    explicit ResourceInfo(std::string resourceName="",
+                 unsigned long long sizeInBytes=0,
                  std::size_t revokeHash=0,
                  bool isRevoked = false):
                     resourceName(std::move(resourceName)),
@@ -21,7 +21,7 @@ struct ResourceInfo {
 
     static ResourceInfo deserializeResource(const char *message, bool toVector = false,int *dataPointer = nullptr) {
         std::string resourceName;
-        unsigned int sizeInBytes;
+        unsigned long long sizeInBytes;
         std::size_t revokeHash;
 
         std::string builder;
@@ -36,7 +36,7 @@ struct ResourceInfo {
 
         //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
         if(!currCharacter)
-            throw std::runtime_error("unexpected end of serialized data while reading resource name");
+            return ResourceInfo(resourceName);
 
 		currCharacter=message[++charIndex];
 		std::string revokeHashBuilder;
@@ -70,7 +70,7 @@ struct ResourceInfo {
             currCharacter=message[++charIndex];
         }
         try {
-            sizeInBytes = std::stoi(sizeBuilder);
+            sizeInBytes = std::stoull(sizeBuilder);
         }
         catch (std::exception& exception){
             throw std::runtime_error("exceeded number value limit or invalid character read while reading resource size");

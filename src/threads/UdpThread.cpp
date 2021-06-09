@@ -4,16 +4,14 @@
 #include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
+
 #include <arpa/inet.h>
 #include <cstring>
 #include <iostream>
 #include <unistd.h>
 #include <string>
-#include <sstream>
 #include <fstream>
-#include <ifaddrs.h>
+
 #include <vector>
 #include "../../include/utils.h"
 #include "../../include/threads/UdpThread.h"
@@ -25,7 +23,7 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
             handleNewResourceAvailable(payload, sockaddr);
             break;
         case OWNER_REVOKED_RESOURCE:
-            handleOwnerRevokedResource(payload, sockaddr);
+            handleOwnerRevokedResource(payload);
             break;
         case NODE_DELETED_RESOURCE:
             handleNodeDeletedResource(payload, sockaddr);
@@ -48,7 +46,11 @@ void UdpThread::runUdpServerThread() {
 	pthread_barrier_wait(barrier);
     broadcastNewNode();
     while (keepGoing){
-        receive();
+        try {
+            receive();
+        }catch(std::exception& e ){
+            std::cout<<"udp catch: "<<e.what()<<std::endl;
+        }
     }
 }
 
@@ -73,12 +75,12 @@ void UdpThread::receive(){
     clientAddr.sin_port = (in_port_t) htons(port);
     printf("recv: %s\n", rbuf);
 
-    char header[HEADER_SIZE+1];
+    char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
     memset(header, 0, HEADER_SIZE);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, HEADER_SIZE+1, "%s", rbuf);
-    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE+1);
+    snprintf(header, HEADER_SIZE, "%s", rbuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE);
     std::string clientAddressString = inet_ntoa(clientAddr.sin_addr);
     std::cout<<"header: "<< header << " payload: " << payload << "\n";
     std::cout<<"clientaddr: "<< clientAddressString << " port: " << htons (clientAddr.sin_port) << "\n";
@@ -88,38 +90,13 @@ void UdpThread::receive(){
 
 }
 
-void UdpThread::getMyAddress(){
-    struct ifaddrs *ifap, *ifa;
-    char *addr;
-    std::string ethernetInterfaceName;
-    std::string ethernetInterfaceNameBegin = "e";
-    getifaddrs (&ifap);
-    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) {
-            if(strncmp(ifa->ifa_name, ethernetInterfaceNameBegin.c_str(), 1) == 0){
-                ethernetInterfaceName = ifa->ifa_name;
-                break;
-            }
-        }
-    }
-
-    freeifaddrs(ifap);
-    struct ifreq ifr;
-    ifr.ifr_addr.sa_family = AF_INET;
-    memcpy(ifr.ifr_name, ethernetInterfaceName.c_str(), IFNAMSIZ-1);
-    ioctl(udpSocket, SIOCGIFADDR, &ifr);
-    myAddress = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
-    printf("eiface is: %s\n",ethernetInterfaceName.c_str());
-    printf("System IP Address is: %s\n",myAddress.c_str());
-}
-
 void UdpThread::initUdp() {
 
     int trueFlag = 1;
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         errno_abort("socket");
     }
-    getMyAddress();
+    myAddress = getMyAddress(udpSocket);
 
     if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
         errno_abort("setsockopt");
@@ -177,7 +154,7 @@ void UdpThread::broadcastNewFile(const ResourceInfo& resource)
 {
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
     snprintf(sbuf, sizeof(sbuf),
-             "%s;%lu;%d",
+             "%s;%lu;%llu",
              resource.resourceName.c_str(),
              resource.revokeHash,
              resource.sizeInBytes);
@@ -185,9 +162,9 @@ void UdpThread::broadcastNewFile(const ResourceInfo& resource)
     genericBroadcast(NEW_RESOURCE_AVAILABLE, sbuf);
 }
 
-void UdpThread::broadcastRevokeFile(const ResourceInfo& resource){
+void UdpThread::broadcastRevokeFile(const std::string& resource){
     char sbuf[MAX_SIZE_OF_PAYLOAD] = {};
-    snprintf(sbuf, sizeof(sbuf), "%s", resource.resourceName.c_str());
+    snprintf(sbuf, sizeof(sbuf), "%s", resource.c_str());
     genericBroadcast(OWNER_REVOKED_RESOURCE, sbuf);
 }
 
@@ -220,29 +197,33 @@ void UdpThread::broadcastLogout(){
 void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddress(sockaddr)][resource.resourceName] = resource;
+    sharedStructs.networkResources[convertAddressLong(sockaddr)][resource.resourceName] = resource;
     sharedStructs.networkResourcesMutex.unlock();
 
 }
 
-void UdpThread::handleOwnerRevokedResource(char *message, sockaddr_in sockaddr) {
+void UdpThread::handleOwnerRevokedResource(char *message) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-//    sharedStructs.networkResources[convertAddress(sockaddr)][resource.resourceName].isRevoked = true;
-    sharedStructs.networkResources[convertAddress(sockaddr)].erase(resource.resourceName);
+    for(auto& resources: sharedStructs.networkResources){
+        auto it = resources.second.find(resource.resourceName);
+        if( it != resources.second.end()){
+            resources.second.erase(resource.resourceName);
+        }
+    }
     sharedStructs.networkResourcesMutex.unlock();
 }
 
 void UdpThread::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddress(sockaddr)].erase(resource.resourceName);
+    sharedStructs.networkResources[convertAddressLong(sockaddr)].erase(resource.resourceName);
     sharedStructs.networkResourcesMutex.unlock();
 }
 
 void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.insert(std::make_pair(convertAddress(sockaddr), std::map<std::string, ResourceInfo>()));
+    sharedStructs.networkResources[convertAddressLong(sockaddr)] = std::map<std::string, ResourceInfo>();
     sharedStructs.networkResourcesMutex.unlock();
     sendMyState(sockaddr);
 }
@@ -253,17 +234,17 @@ void UdpThread::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(message);
     sharedStructs.networkResourcesMutex.lock();
     if( resources.empty() ){
-        sharedStructs.networkResources[convertAddress(sockaddr)] = std::map<std::string, ResourceInfo>();
+        sharedStructs.networkResources[convertAddressLong(sockaddr)] = std::map<std::string, ResourceInfo>();
     }
     for(const auto & r : resources){
-        sharedStructs.networkResources[convertAddress(sockaddr)][r.resourceName] = r;
+        sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
     }
     sharedStructs.networkResourcesMutex.unlock();
 }
 
 void UdpThread::handleNodeLeftNetwork(sockaddr_in sockaddr) {
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.erase(convertAddress(sockaddr));
+    sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
     sharedStructs.networkResourcesMutex.unlock();
 }
 
@@ -273,7 +254,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
     for(const auto& [resourceName, resource] : sharedStructs.localResources){
-        if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
+        if(ss.str().size() + resourceName.size() + sizeof(long) + sizeof(int) > MAX_SIZE_OF_PAYLOAD){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
             snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
@@ -281,9 +262,9 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
             if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
                 errno_abort("send");
             }
-            ss.clear();
+            ss.str("");
         }
-        ss << ";" << resource.resourceName;
+        ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
     }
 
     sharedStructs.localResourcesMutex.unlock();

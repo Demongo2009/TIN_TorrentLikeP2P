@@ -9,10 +9,10 @@
 #include <unistd.h>
 #include <iostream>
 #include <string>
-#include <sstream>
 #include <fstream>
 #include <cmath>
 #include <vector>
+#include <cstdio>
 #include "../../include/threads/TcpThread.h"
 #include "../../include/utils.h"
 
@@ -20,10 +20,11 @@ void TcpThread::initTcp(){
     struct sockaddr_in serverAddr{};
 
     tcpSocket = socket(PF_INET, SOCK_STREAM, 0);
+    myAddress = getMyAddress(tcpSocket);
     serverAddr.sin_family = AF_INET;
 
     serverAddr.sin_port = htons(port);
-    serverAddr.sin_addr.s_addr = inet_addr(address.c_str());
+    serverAddr.sin_addr.s_addr = inet_addr(myAddress.c_str());
 
 
     memset(serverAddr.sin_zero, 0, sizeof serverAddr.sin_zero);
@@ -32,8 +33,8 @@ void TcpThread::initTcp(){
 
     if (returnCode == -1) {
         printf("BIND ERROR: %s\n", strerror(errno));
-        close(tcpSocket);
-        exit(1);
+//        close(tcpSocket);
+//        exit(1);
     }
 
     returnCode = listen(tcpSocket, 16);
@@ -73,19 +74,24 @@ int TcpThread::acceptClient() {
         printf("GETPEERNAME ERROR: %s\n", strerror(errno));
     }
     else {
-        std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr);
+        std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr)<< "socket: "<<clientSocket<<std::endl;
     }
     connectedClients.insert(std::make_pair(clientSocket, clientAddr));
+    for(auto& it: connectedClients){
+        std::cout<<"connectedcleints"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"port "<<htons(it.second.address.sin_port)<<std::endl;
+    }
     return clientSocket;
 }
 
 void TcpThread::receive(int socket){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) < 0) {
+    if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) <= 0) {
         perror("receive error");
-        if(connectedClients.find(socket)!= connectedClients.end())
+        if(connectedClients.find(socket)!= connectedClients.end()) {
             connectedClients.erase(socket);
+            close(socket);
+        }
         return;
     }
 
@@ -95,36 +101,48 @@ void TcpThread::receive(int socket){
     char payload[MAX_SIZE_OF_PAYLOAD];
     memset(header, 0, HEADER_SIZE);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, sizeof(header), "%s", rbuf);
-    snprintf(payload, sizeof(payload), "%s", rbuf+HEADER_SIZE+1);
-
-    handleTcpMessage(header, payload, socket);
+    snprintf(header, HEADER_SIZE , "%s", rbuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE);
+    try {
+        handleTcpMessage(header, payload, socket);
+    }catch (std::exception& e ){
+        std::cout<<"tcp catch: "<< e.what()<<std::endl;
+    }
 
 }
 
 void TcpThread::runTcpServerThread() {
 
     initTcp();
+
     while (keepGoing) {
-        std::cout<<"TCP"<<std::endl;
+        std::cout << "TCP" << std::endl;
         int socket = acceptClient();
-        if(socket > 0)
+        if (socket > 0) {
             std::thread tcpWorker(&TcpThread::receive, this, socket);
-//        receive(socket, true);
+            tcpWorker.detach();
+        }
     }
 }
 
 
 void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
-
+    std::cout<<"handletcp header "<<header<< " payload "<< payload;
     if(std::stoi(header) == DEMAND_CHUNK){
+        std::cout<<"handletcp"<<std::endl;
         if(!connectedClients.at(socket).isSync){
+            std::cout<<"syncing"<<std::endl;
             sendSync(socket);
-            receiveSync(socket);
-            connectedClients.at(socket).isSync = true;
+            if(receiveSync(socket, std::nullopt)) {
+                connectedClients.at(socket).isSync = true;
+            } else{
+                std::cout<<"sync error"<<std::endl;
+                return;
+            }
         }
         demandChunkJob(payload, socket);
         receive(socket);
+        connectedClients.erase(socket);
     }else{
         throw std::runtime_error("bad tcp header received");
     }
@@ -133,12 +151,16 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
 
 bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
     sharedStructs.localResourcesMutex.lock();
-    if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() )
+    if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() ) {
+        sharedStructs.localResourcesMutex.unlock();
         return false;
+    }
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
+    int c = CHUNK_SIZE;
     for(const auto & index : message.chunkIndices) {
-        long offset = index * CHUNK_SIZE;
+        long offset = index * c;
         if (offset > fileSize){//todo może >= nie chce mi się myśleć
+            sharedStructs.localResourcesMutex.unlock();
             return false;
         }
 
@@ -151,52 +173,76 @@ void TcpThread::demandChunkJob(char *payload, int socket){
     DemandChunkMessage message = DemandChunkMessage::deserializeChunkMessage(payload);
     ResourceInfo resource;
     if(!validateChunkDemand(message)){
+        std::cout<<"invlid chunk request"<< message.resourceName << message.chunkIndices[0] <<std::endl;
         sendHeader(socket, INVALID_CHUNK_REQUEST);
         close(socket);
         return;
     }
     sendChunks(message, socket);
-    close(socket);
 
 }
 
 
 void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
-
+    std::cout<<"sendchunks"<<std::endl;
     std::string filepath = sharedStructs.filepaths.at(message.resourceName);
-    std::ifstream ifs {filepath, std::ios::in | std::ios_base::binary};
+    std::ifstream ifs {filepath, std::ios::in };
     sharedStructs.localResourcesMutex.lock();
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     sharedStructs.localResourcesMutex.unlock();
     char chunk[CHUNK_SIZE];
-    char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    char sbuf[MAX_MESSAGE_SIZE] = {};
+    int c = CHUNK_SIZE;
+    int nToWrite;
     for(const auto & index : message.chunkIndices) {
-        long offset = index * CHUNK_SIZE;
+        long offset = index * c;
         ifs.seekg(offset, std::ios::beg);
+
         memset(chunk, 0, CHUNK_SIZE);
-        if (offset + CHUNK_SIZE <= fileSize) {
+        if (offset + c <= fileSize) {
             ifs.read(chunk, CHUNK_SIZE);
+            nToWrite = c;
         } else {
+            std::cout<<"ile: "<<fileSize - offset << std::endl;
             ifs.read(chunk, fileSize - offset);
+            chunk[fileSize - offset] = '\0';
+            nToWrite = fileSize - offset;
         }
         memset(sbuf, 0, sizeof(sbuf));
-        snprintf(sbuf, sizeof(sbuf), "%d;%d;%s", CHUNK_TRANSFER, index, chunk);
-
-        if (send(socket, sbuf, sizeof sbuf, 0)) {
+        snprintf(sbuf, sizeof(sbuf), "%d;%lu;", CHUNK_TRANSFER, index);
+        memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
+        if (send(socket, sbuf, MAX_MESSAGE_SIZE, 0) < 0) {
             errno_abort("send chunk");
         }
+        receiveHeader(socket, CHUNK_TRANSFER_OK);
     }
-
+    ifs.close();
 }
 
 void TcpThread::sendHeader(int socket, TcpMessageCode code){
     char sbuf[HEADER_SIZE];
     memset(sbuf, 0, sizeof(sbuf));
     snprintf(sbuf, sizeof(sbuf), "%d", code);
-
-    if (send(socket, sbuf, sizeof sbuf, 0)) {
+    int n;
+    if ( (n = send(socket, sbuf, sizeof sbuf, 0)) < 0 ) {
         errno_abort("send code error");
     }
+    std::cout<<"SEND HEADER "<< sbuf<< "n: "<< n << std::endl;
+}
+
+bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
+    char header[HEADER_SIZE];
+    memset(header, 0, HEADER_SIZE);
+    if (recv(socket, header, sizeof(header), 0) <= 0) {
+        std::cout<<"recverror"<<std::endl;
+        perror("receive error");
+        return false;
+    }
+    if(std::stoi(header) == code){
+        return true;
+    }
+    std::cout<<"bad receive header"<< std::stoi(header)<<std::endl;
+    return false;
 }
 
 void TcpThread::sendSync(int socket){
@@ -204,6 +250,7 @@ void TcpThread::sendSync(int socket){
     sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    std::cout<<"sending"<<std::endl;
     for(const auto& [resourceName, resource] : sharedStructs.localResources){
         if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
@@ -212,9 +259,10 @@ void TcpThread::sendSync(int socket){
             if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("sync");
             }
-            ss.clear();
+            ss.str("");
+            receiveHeader(socket, SYNC_OK);
         }
-        ss << ";" << resource.resourceName;
+        ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
     }
 
     sharedStructs.localResourcesMutex.unlock();
@@ -223,54 +271,67 @@ void TcpThread::sendSync(int socket){
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
 
-    if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
+    if (send(socket, sbuf, strlen(sbuf) + 1, 0) <= 0) {
         errno_abort("sync");
     }
-
+    receiveHeader(socket, SYNC_OK);
     sendHeader(socket, SYNC_END);
-
+    std::cout<<"sent: "<<sbuf<<std::endl;
 }
 
-void TcpThread::clearPeerInfo(int socket){
+void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
     sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.erase(convertAddress(connectedClients.at(socket).address));
+    for(auto& it: connectedClients){
+        std::cout<<"clearpeer"<<it.first<<"issync "<<it.second.isSync<<"addr "<<inet_ntoa(it.second.address.sin_addr)<<"issync "<<htons(it.second.address.sin_port)<<std::endl;
+    }
+    sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
     sharedStructs.networkResourcesMutex.unlock();
 }
 
-void TcpThread::receiveSync(int socket){
-
-    clearPeerInfo(socket);
+bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockaddrOpt ){
+    struct sockaddr_in sockaddr;
+    if(sockaddrOpt.has_value()){
+        sockaddr = sockaddrOpt.value();
+    }else{
+        sockaddr = connectedClients.at(socket).address;
+    }
+    clearPeerInfo(sockaddr);
     char rbuf[MAX_MESSAGE_SIZE];
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
-    bool end = false;
-    while (!end) {
+    std::cout<<"receiving"<<std::endl;
+    while (true) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
-        if (recv(socket, rbuf, sizeof(rbuf), 0) < 0) {
+        if (recv(socket, rbuf, sizeof(rbuf), 0) <= 0) {
+            std::cout<<"recverror"<<std::endl;
             perror("receive error");
-            exit(EXIT_FAILURE);
+            return false;
         }
 
         memset(header, 0, HEADER_SIZE);
-        snprintf(header, sizeof(header), "%s", rbuf);
+        snprintf(header, HEADER_SIZE , "%s", rbuf);
+        std::cout<<"syncheader"<<header<<std::endl;
         if(std::stoi(header) == MY_STATE_BEFORE_FILE_TRANSFER) {
+            std::cout<<"in"<<header<<std::endl;
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-            snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE + 1);
+            snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE);
             std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(payload);
             sharedStructs.networkResourcesMutex.lock();
             for(const auto & r : resources){
-                sharedStructs.networkResources[convertAddress(connectedClients.at(socket).address)][r.resourceName] = r;
+                std::cout<<"reveivesync"<<std::endl;
+                sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
             }
             sharedStructs.networkResourcesMutex.unlock();
+            sendHeader(socket, SYNC_OK);
         } else if(std::stoi(header) == SYNC_END){
-            end = true;
+            std::cout<<"in2"<<header<<std::endl;
+            return true;
         }else{
             //invalid chunk request
             throw std::runtime_error("receive sync bad header");
         }
 
     }
-
 
 }
 

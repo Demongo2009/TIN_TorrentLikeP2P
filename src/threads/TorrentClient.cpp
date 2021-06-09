@@ -1,6 +1,4 @@
 #include <thread>
-#include <iostream>
-#include <sstream>
 #include <fstream>
 #include "../../include/threads/TorrentClient.h"
 #include <pthread.h>
@@ -8,25 +6,18 @@
 void TorrentClient::run() {
 
 	pthread_barrier_t barrier;
-	const pthread_barrierattr_t *barrierattr;
-	int success = pthread_barrier_init(&barrier, nullptr,3);
+	pthread_barrier_init(&barrier, nullptr,3);
 	udpObj->setBarrier(&barrier);
 	tcpObj->setBarrier(&barrier);
 	cliObj->setBarrier(&barrier);
 
-    try {
-        std::thread udpThread(UdpThread::start, udpObj.get());
-        std::thread tcpThread(TcpThread::start, tcpObj.get());
-        std::thread cliThread(CliThread::start, cliObj.get());
-        cliThread.join();
-        tcpObj->terminate();
-        udpObj->terminate();
-    }catch (std::exception& e){
-        std::cout<<"catch"<<e.what()<<std::endl;
-        cliObj->terminate();
-        tcpObj->terminate();
-        udpObj->terminate();
-    }
+
+    std::thread udpThread(UdpThread::start, udpObj.get());
+    std::thread tcpThread(TcpThread::start, tcpObj.get());
+    std::thread cliThread(CliThread::start, cliObj.get());
+    cliThread.join();
+    tcpObj->terminate();
+    udpObj->terminate();
 
 
     /**

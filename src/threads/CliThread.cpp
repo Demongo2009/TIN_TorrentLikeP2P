@@ -6,8 +6,6 @@
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
-#include <sstream>
-#include <fstream>
 #include <cmath>
 #include <cassert>
 #include "../../include/utils.h"
@@ -41,7 +39,7 @@ void CliThread::runCliThread() {
 
     while(keepGoing){
         ClientCommand parsedCommand;
-        std::string filepath, resourceName;
+        std::string filepath, resourceName,password;
         std::cout<<"CLI"<<std::endl;
         ss << line;
         for(std::string s; ss >>s;){
@@ -54,7 +52,7 @@ void CliThread::runCliThread() {
         if(foundCommand){
             switch (parsedCommand) {
                 case ADD_NEW_RESOURCE:
-                    std::string password = getUserPassword();
+                    password = getUserPassword();
 
                     handleClientAddResource(resourceName, filepath,password);
                     break;
@@ -68,7 +66,7 @@ void CliThread::runCliThread() {
                     handleDownloadResource(resourceName, filepath);
                     break;
                 case REVOKE_RESOURCE:
-                    std::string password = getUserPassword();
+                    password = getUserPassword();
                     handleRevokeResource(resourceName, password);
                     break;
                 case EXIT:
@@ -197,6 +195,19 @@ void CliThread::handleClientAddResource(const std::string& resourceName, const s
     resourceInfo.isRevoked = false;
 
     sharedStructs.localResourcesMutex.lock();
+    if(sharedStructs.localResources.find(resourceName) != sharedStructs.localResources.end()){
+        std::cout << "File of this name already exists!\n";
+        sharedStructs.localResourcesMutex.unlock();
+        return;
+    }
+    for(auto& resources: sharedStructs.networkResources){
+        auto it = resources.second.find(resourceName);
+        if( it != resources.second.end()){
+            std::cout << "File of this name already exists!\n";
+            sharedStructs.localResourcesMutex.unlock();
+            return;
+        }
+    }
     sharedStructs.localResources.emplace(resourceName, resourceInfo);
     sharedStructs.localResourcesMutex.unlock();
     sharedStructs.filepaths.insert(std::make_pair(resourceName, filepath));
@@ -216,8 +227,8 @@ void CliThread::handleClientListResources() {
     sharedStructs.networkResourcesMutex.lock();
     struct in_addr addr{};
     for(const auto& [peerAddress, resources] : sharedStructs.networkResources){
-        addr.s_addr = peerAddress.first;
-        std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
+        addr.s_addr = peerAddress;
+        std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr) <<std::endl;
         for(const auto& it: resources){
             std::cout<< "NAME: "<<it.first<< " SIZE: "<<it.second.sizeInBytes<<std::endl;
         }
@@ -238,8 +249,8 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
     for(auto& [peerAddress, resources]: sharedStructs.networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
-            addr.s_addr = peerAddress.first;
-            std::cout<< "NETWORK RESOURCE OF PEER: "<<inet_ntoa(addr)<<" PORT: "<< peerAddress.second <<std::endl;
+            addr.s_addr = peerAddress;
+            std::cout<< "NETWORK RESOURCE OF PEER: "<<inet_ntoa(addr) <<std::endl;
             std::cout<<"NAME: "<< resourceName<< " SIZE: " << it->second.sizeInBytes << std::endl;
         }
     }
@@ -248,11 +259,12 @@ void CliThread::handleClientFindResource(const std::string& resourceName) {
 
 
 void CliThread::handleDownloadResource(const std::string& resourceName, const std::string& filepath) {
-    std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, filepath);
+    std::thread downloadThread(&CliThread::downloadResourceJob, this, resourceName, "filepath");
     downloadThread.detach();
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
+    std::cout<<"1. job start"<<std::endl;
     sharedStructs.localResourcesMutex.lock();
     auto it = sharedStructs.localResources.find(resourceName);
     if( it != sharedStructs.localResources.end()){
@@ -264,15 +276,17 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     sharedStructs.networkResourcesMutex.lock();
     struct sockaddr_in addr{};
     std::vector<struct sockaddr_in> peersPossessingResource;
-    unsigned int fileSize;
+    unsigned long long fileSize;
+    std::size_t revokeHash;
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
-            addr.sin_addr.s_addr = peerAddress.first;
-            addr.sin_port = peerAddress.second;
+            addr.sin_addr.s_addr = peerAddress;
+            addr.sin_port = ntohs(5555);
             addr.sin_family = AF_INET;
             peersPossessingResource.emplace_back(addr);
             fileSize = it->second.sizeInBytes;
+            revokeHash = it->second.revokeHash;
         }
     }
     sharedStructs.networkResourcesMutex.unlock();
@@ -280,26 +294,37 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
         std::cout<<"NONE IS IN POSSESSION OF THIS RESOURCE "<< resourceName<< std::endl;
         return;
     }
+    std::cout<<"2. count peers"<<peersPossessingResource.size()<<std::endl;
     std::vector<std::vector<int> > chunkIndices = prepareChunkIndices(peersPossessingResource.size(), fileSize);
-    assert(peersPossessingResource.size() == chunkIndices.size()); //debug
+    std::cout<<"3. count chunk indices"<<chunkIndices.size()<<std::endl;
+//    for(auto& indices: chunkIndices){
+//        std::cout<<"PEER indices: "<<std::endl;
+//        for(auto& i : indices){
+//            std::cout<<"id: "<<i<<std::endl;
+//        }
+//    }
     std::vector<std::thread> threads;
-    threads.reserve(peersPossessingResource.size());
-    ongoingDowloadingFilepaths.insert(filepath);
-    for(int i = 0; i < peersPossessingResource.size(); ++i){
-        threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], filepath);
+    threads.reserve(chunkIndices.size());
+    SynchronizedFile file = SynchronizedFile(filepath);
+    file.reserveFile(fileSize);
+    ongoingDownloadingFiles.insert(std::make_pair(filepath, file));
+    for(int i = 0; i < chunkIndices.size(); ++i){
+        std::cout<<"4. START THREAD for: "<<inet_ntoa(peersPossessingResource[i].sin_addr)<<std::endl;
+        threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath);
     }
     for(auto & thread: threads){
         thread.join();
     }
-    ongoingDowloadingFilepaths.erase(filepath);
-    ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize);
+    ongoingDownloadingFiles.erase(filepath);
+    ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize, revokeHash);
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
     sharedStructs.localResourcesMutex.unlock();
+    sharedStructs.filepaths[resourceName] = filepath;
     udpObj->broadcastNewFile(downloadedResource);
 }
 
-void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string &filepath){
+void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string& resourceName, const std::string &filepath){
 
     std::stringstream ss;
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
@@ -309,90 +334,101 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     if(connect(sock, (struct sockaddr *) &sockaddr, sizeof sockaddr) < 0){
         throw std::runtime_error("connect fail");
     }
+    std::cout<<"5. connected to"<< inet_ntoa(sockaddr.sin_addr)<< " socket: "<< sock <<std::endl;
     openSockets.insert(sock);
     int chunksCount = 0;
     for(const auto& index : chunksIndices){
-        if(ss.str().size() + std::to_string(index).size() > MAX_SIZE_OF_PAYLOAD){
+        if(ss.str().size() + 2 * std::to_string(index).size() + resourceName.size() + 1>= MAX_SIZE_OF_PAYLOAD){
             memset(payload, 0 , sizeof(payload));
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
-            snprintf(sbuf, sizeof(sbuf), "%d;%s", DEMAND_CHUNK, payload);
+            snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
+            std::cout<<"6. SENDING request: "<<sbuf<<" to "<< sock <<std::endl;
             if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("send");
             }
-            ss.clear();
+            ss.str("");
             if(first){
-                tcpObj->receiveSync(sock);
+                bool a = tcpObj->receiveSync(sock, sockaddr);
+                std::cout<<"7. RECEIVED SYNC: "<<a<<" to "<< sock <<std::endl;
                 tcpObj->sendSync(sock);
+                std::cout<<"8. Sent SYNC: "<<a<<" to "<< sock <<std::endl;
                 first = false;
             }
+            std::cout<<"9. RECEIVING CHUNKS count : "<<chunksCount<<" from "<< sock <<std::endl;
             receiveChunks(sock, chunksCount, filepath);
+
             chunksCount = 0;
         }
         ++chunksCount;
-        ss << ";" << std::to_string(index);
+        ss<< index << ";" ;
+//        std::cout<<"STRINGS: " << ss.str() <<std::endl;
+
     }
     memset(sbuf, 0 , sizeof(sbuf));
     memset(payload, 0 , sizeof(payload));
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-    snprintf(sbuf, sizeof(sbuf), "%d;%s", DEMAND_CHUNK, payload);
+    snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
+    std::cout<<"10. SENDING request: "<<sbuf<<" to "<< sock <<std::endl;
     if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
         errno_abort("send");
     }
+    if(first){
+
+        bool a = tcpObj->receiveSync(sock,sockaddr);
+        std::cout<<"11. RECEIVED SYNC: "<<a<<" to "<< sock <<std::endl;
+        tcpObj->sendSync(sock);
+        std::cout<<"12. Sent SYNC: "<<a<<" to "<< sock <<std::endl;
+        std::cout<<"poszlo"<<std::endl;
+    }
+    std::cout<<"13. RECEIVING CHUNKS count : "<<chunksCount<<" from "<< sock <<std::endl;
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
+    std::cout<<"14. DONE: "<<std::endl;
     openSockets.erase(sock);
 }
 
+
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
-    char header[HEADER_SIZE];
-    char indexBuffer[sizeof (int)];
-    char payload[MAX_SIZE_OF_PAYLOAD];
-    int index;
+    unsigned long long fileSize;
     for(int i = 0; i < chunksCount; ++i) {
+        std::cout<< "przed memset "<<std::endl;
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
+        std::cout<< "przed recv "<<std::endl;
+
         if (recv(sock, rbuf, sizeof(rbuf), 0) < 0) {
             perror("receive error");
             exit(EXIT_FAILURE);
         }
 
-        memset(header, 0, HEADER_SIZE);
-        snprintf(header, sizeof(header), "%s", rbuf);
-        memset(indexBuffer, 0, sizeof indexBuffer);
-        snprintf(indexBuffer, sizeof(indexBuffer), "%s", rbuf + sizeof header + 1);
-        index = std::stoi(indexBuffer);
-        if (std::stoi(header) == CHUNK_TRANSFER) {
-            memset(payload, 0, CHUNK_SIZE);
-            snprintf(payload, sizeof(payload), "%s", rbuf + (HEADER_SIZE + 1)*2);
-            writeFile(payload, index, filepath);
-        } else {
-            //invalid chunk request
+//        std::cout<< "przed deserialize rbuf: "<<rbuf<<std::endl;
+        fileSize = ongoingDownloadingFiles.at(filepath).getSize();
+        std::optional<ChunkTransfer> messageOpt = ChunkTransfer::deserializeChunkTransfer(rbuf, fileSize);
+        if (messageOpt.has_value()){
+            ChunkTransfer message = messageOpt.value();
+//            std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
+            std::cout<< " got chunk idx "<< message.index << std::endl;
+            tcpObj->sendHeader(sock, CHUNK_TRANSFER_OK);
+            ongoingDownloadingFiles.at(filepath).write(message.payload, message.index);
+        }else {
             throw std::runtime_error("receive chunks bad header");
         }
 
     }
 }
 
-
-void CliThread::writeFile( const char* payload, unsigned int index, const std::string &filepath) { //todo może trzeba tu mutexa
-    std::ofstream ofs (filepath, std::ofstream::out | std::ofstream::binary);
-    long offset = index * CHUNK_SIZE;
-    ofs.seekp(offset, std::ios::beg);
-    ofs<<payload;
-    ofs.close();
-}
-
 std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, unsigned int fileSize){
     std::vector<std::vector<int> > chunkIndices;
-    int chunks = ceil((double) fileSize / CHUNK_SIZE );
-    int chunksPerPeer = ceil((double) chunks / peersCount );
-    for(int i = 0; i < chunksPerPeer && i < chunks; ++i){
+    int c = CHUNK_SIZE;
+    int f = fileSize;
+    int chunks = ceil((double) f / c );
+    for(int i = 0; i < peersCount && i < chunks; ++i){
         chunkIndices.emplace_back(std::vector<int>());
     }
 
     for(int i = 0; i < chunks; ++i){
-        chunkIndices[i%chunksPerPeer].emplace_back(i);
+        chunkIndices[i%peersCount].emplace_back(i);
     }
     return chunkIndices;
 }
@@ -410,10 +446,18 @@ void CliThread::handleRevokeResource(const std::string& resourceName, const std:
         std::cout<<"You are not an original owner of this resource"<<std::endl;
         return;
     }
-//    localResources.at(resourceName).isRevoked = true;
     sharedStructs.localResources.erase(resourceName);
     sharedStructs.localResourcesMutex.unlock();
-    udpObj->broadcastRevokeFile(sharedStructs.localResources.at(resourceName));
+    sharedStructs.networkResourcesMutex.lock();
+    for(auto& resources: sharedStructs.networkResources){
+        auto it = resources.second.find(resourceName);
+        if( it != resources.second.end()){
+            resources.second.erase(resourceName);
+        }
+    }
+    sharedStructs.networkResourcesMutex.unlock();
+
+    udpObj->broadcastRevokeFile(resourceName);
 
 }
 

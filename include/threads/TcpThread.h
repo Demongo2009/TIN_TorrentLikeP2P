@@ -18,27 +18,28 @@
 class TcpThread{
 
 public:
-    TcpThread(SharedStructs& structs) : sharedStructs(structs){ keepGoing = true; }
+    explicit TcpThread(SharedStructs& structs) : sharedStructs(structs){ keepGoing = true; }
 
     static void start(TcpThread* tcpObj){
     	tcpObj->runTcpServerThread();
     }
     void runTcpServerThread();
 
-    void receiveSync(int socket);
+    bool receiveSync(int socket, std::optional<struct sockaddr_in> sockaddr);
 
     void sendSync(int socket);
     void terminate();
 
 	void setBarrier(pthread_barrier_t *ptr);
 	void initTcp();
-
+    static void sendHeader(int socket, TcpMessageCode code);
+    bool receiveHeader(int socket, TcpMessageCode code);
 private:
     bool keepGoing;
     SharedStructs& sharedStructs;
     int tcpSocket;
     const int port = 5555;
-    const std::string address = "127.0.0.1";
+    std::string myAddress;
     std::map<int, ConnectedPeerInfo> connectedClients;
 	pthread_barrier_t* barrier;
 
@@ -57,10 +58,10 @@ private:
 
     void sendChunks(const DemandChunkMessage &message, int socket);
 
-    static void sendHeader(int socket, TcpMessageCode code);
 
-    void clearPeerInfo(int socket);
+    void clearPeerInfo(struct sockaddr_in sockaddr);
     bool validateChunkDemand(const DemandChunkMessage& message);
+
 
 };
 
