@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <iostream>
 #include <cstring>
 
 //      NAZWA=KOD                       CO PRZESYLAMY
@@ -18,6 +19,7 @@ enum TcpMessageCode {
     CHUNK_TRANSFER=142,                 // indexOfChunk, data
     SYNC_END = 143,
     SYNC_OK = 144,
+    CHUNK_TRANSFER_OK = 145,
     INVALID_CHUNK_REQUEST = 440
 };
 enum UdpMessageCode {
@@ -110,7 +112,7 @@ enum ClientCommand {
 struct ChunkTransfer{
     TcpMessageCode header;
     unsigned long index;
-    char payload[CHUNK_SIZE];
+    char payload[CHUNK_SIZE + 1];
     ChunkTransfer( TcpMessageCode header, unsigned long index, char* payload): header(header), index(index){
         memcpy(this->payload, payload, strlen(payload));
         strncpy(this->payload, payload, strlen(payload) );
@@ -136,8 +138,10 @@ struct ChunkTransfer{
             currCharacter=message[++charIndex];
         }
         ++charIndex;
+        std::cout<< "w deserialize charindex:"<<charIndex<<"message"<<message<<std::endl;
         strncpy( payload, message + charIndex, strlen(message) - charIndex );
         payload[strlen(message) - charIndex] = '\0';
+        std::cout<< "w deserialize przed return charindex:"<<charIndex<<"message"<<message<<std::endl;
         return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex), payload);
     }
 };

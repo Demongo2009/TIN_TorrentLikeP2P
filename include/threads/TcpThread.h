@@ -32,7 +32,8 @@ public:
 
 	void setBarrier(pthread_barrier_t *ptr);
 	void initTcp();
-
+    static void sendHeader(int socket, TcpMessageCode code);
+    bool receiveHeader(int socket, TcpMessageCode code);
 private:
     bool keepGoing;
     SharedStructs& sharedStructs;
@@ -57,11 +58,10 @@ private:
 
     void sendChunks(const DemandChunkMessage &message, int socket);
 
-    static void sendHeader(int socket, TcpMessageCode code);
 
     void clearPeerInfo(struct sockaddr_in sockaddr);
     bool validateChunkDemand(const DemandChunkMessage& message);
-    bool receiveHeader(int socket, TcpMessageCode code);
+
 
 };
 

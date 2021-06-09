@@ -207,6 +207,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         if (send(socket, sbuf, sizeof sbuf, 0) < 0) {
             errno_abort("send chunk");
         }
+        receiveHeader(socket, CHUNK_TRANSFER_OK);
     }
 
 }
