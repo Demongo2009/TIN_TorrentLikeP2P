@@ -86,8 +86,10 @@ void TcpThread::receive(int socket){
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
     if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) <= 0) {
         perror("receive error");
-        if(connectedClients.find(socket)!= connectedClients.end())
+        if(connectedClients.find(socket)!= connectedClients.end()) {
             connectedClients.erase(socket);
+            close(socket);
+        }
         return;
     }
 
@@ -175,7 +177,6 @@ void TcpThread::demandChunkJob(char *payload, int socket){
         return;
     }
     sendChunks(message, socket);
-    close(socket);
 
 }
 
@@ -252,7 +253,7 @@ void TcpThread::sendSync(int socket){
             if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("sync");
             }
-            ss.clear();
+            ss.str("");
             receiveHeader(socket, SYNC_OK);
         }
         ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";

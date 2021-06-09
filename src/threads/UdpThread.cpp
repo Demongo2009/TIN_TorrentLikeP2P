@@ -262,7 +262,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
             if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
                 errno_abort("send");
             }
-            ss.clear();
+            ss.str("");
         }
         ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
     }

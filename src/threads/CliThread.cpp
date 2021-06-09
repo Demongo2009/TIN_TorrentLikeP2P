@@ -77,7 +77,7 @@ void CliThread::runCliThread() {
             }
         }
 
-        ss.clear();
+        ss.str("");
         vecWord.clear();
         std::cout << prompt;
         std::getline(std::cin, line);
@@ -335,7 +335,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("send");
             }
-            ss.clear();
+            ss.str("");
             if(first){
                 tcpObj->receiveSync(sock, sockaddr);
                 tcpObj->sendSync(sock);
