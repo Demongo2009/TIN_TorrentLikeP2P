@@ -222,6 +222,20 @@ void TcpThread::sendHeader(int socket, TcpMessageCode code){
     std::cout<<"SEND HEADER "<< sbuf<< "n: "<< n << std::endl;
 }
 
+bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
+    char header[HEADER_SIZE];
+    memset(header, 0, HEADER_SIZE);
+    if (recv(socket, header, sizeof(header), 0) <= 0) {
+        std::cout<<"recverror"<<std::endl;
+        perror("receive error");
+        return false;
+    }
+    if(std::stoi(header) == code){
+        return true;
+    }
+    return false;
+}
+
 void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr){
     std::stringstream ss;
     sharedStructs.localResourcesMutex.lock();
@@ -237,6 +251,7 @@ void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr)
                 errno_abort("sync");
             }
             ss.clear();
+            receiveHeader(socket, SYNC_OK);
         }
         ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
     }
@@ -247,12 +262,12 @@ void TcpThread::sendSync(int socket, std::optional<struct sockaddr_in> sockaddr)
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
 
-    if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
+    if (send(socket, sbuf, strlen(sbuf) + 1, 0) <= 0) {
         errno_abort("sync");
     }
-
+    receiveHeader(socket, SYNC_OK);
     sendHeader(socket, SYNC_END);
-    std::cout<<"sent"<<std::endl;
+    std::cout<<"sent: "<<sbuf<<std::endl;
 }
 
 void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
@@ -298,6 +313,7 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
                 sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
             }
             sharedStructs.networkResourcesMutex.unlock();
+            sendHeader(socket, SYNC_OK);
         } else if(std::stoi(header) == SYNC_END){
             std::cout<<"in2"<<header<<std::endl;
             return true;

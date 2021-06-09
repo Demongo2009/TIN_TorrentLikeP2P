@@ -61,6 +61,7 @@ private:
 
     void clearPeerInfo(struct sockaddr_in sockaddr);
     bool validateChunkDemand(const DemandChunkMessage& message);
+    bool receiveHeader(int socket, TcpMessageCode code);
 
 };
 
