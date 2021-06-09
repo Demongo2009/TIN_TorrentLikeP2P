@@ -189,28 +189,34 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     sharedStructs.localResourcesMutex.unlock();
     char chunk[CHUNK_SIZE];
-    char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+    char sbuf[MAX_MESSAGE_SIZE] = {};
     int c = CHUNK_SIZE;
+    int nToWrite;
     for(const auto & index : message.chunkIndices) {
         long offset = index * c;
         ifs.seekg(offset, std::ios::beg);
         memset(chunk, 0, CHUNK_SIZE);
         if (offset + c <= fileSize) {
             ifs.read(chunk, CHUNK_SIZE);
+            nToWrite = c;
         } else {
             std::cout<<"ile: "<<fileSize - offset << std::endl;
             ifs.read(chunk, fileSize - offset);
             chunk[fileSize - offset] = '\0';
+            nToWrite = fileSize - offset;
         }
         memset(sbuf, 0, sizeof(sbuf));
-        snprintf(sbuf, sizeof(sbuf), "%d;%lu;%s", CHUNK_TRANSFER, index, chunk);
-        std::cout<<"\n\n\n\n sbuf: "<< sbuf<<std::endl;
-        if (send(socket, sbuf, sizeof sbuf, 0) < 0) {
+        snprintf(sbuf, sizeof(sbuf), "%d;%lu;", CHUNK_TRANSFER, index);
+        std::cout<<"sbuf przed"<<sbuf<<"ntowrite"<<nToWrite<<std::endl;
+        memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
+        std::cout<<"sbuf po: "<< sbuf<<std::endl;
+        std::cout<<"chunk"<<chunk<<std::endl;
+        if (send(socket, sbuf, MAX_MESSAGE_SIZE, 0) < 0) {
             errno_abort("send chunk");
         }
         receiveHeader(socket, CHUNK_TRANSFER_OK);
     }
-
+    ifs.close();
 }
 
 void TcpThread::sendHeader(int socket, TcpMessageCode code){
@@ -235,7 +241,7 @@ bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
     if(std::stoi(header) == code){
         return true;
     }
-    std::cout<<"bad receive header"<<std::endl;
+    std::cout<<"bad receive header"<< std::stoi(header)<<std::endl;
     return false;
 }
 

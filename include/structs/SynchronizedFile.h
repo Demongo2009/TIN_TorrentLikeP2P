@@ -32,7 +32,12 @@ public:
         return filename;
     }
 
+    unsigned long long getSize()const {
+        return size;
+    }
+
     void reserveFile(unsigned long long fileSize){
+        this->size = fileSize;
         char buffer[] = {"1"};
         FILE * pFile = std::fopen (filename.c_str(), "wb");
         for(unsigned long long i = 0; i < fileSize; ++i) {
@@ -44,6 +49,7 @@ public:
 private:
     std::string filename;
     std::mutex writerMutex;
+    unsigned long long size;
 
 
 };

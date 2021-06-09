@@ -77,7 +77,7 @@ void CliThread::runCliThread() {
             }
         }
 
-        ss.str("");
+        ss.clear();
         vecWord.clear();
         std::cout << prompt;
         std::getline(std::cin, line);
@@ -362,7 +362,6 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
         tcpObj->sendSync(sock);
         std::cout<<"poszlo"<<std::endl;
     }
-    unsigned long long size = sharedStructs.networkResources[sockaddr.sin_addr.s_addr].at(resourceName).sizeInBytes;
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
     openSockets.erase(sock);
@@ -371,6 +370,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
+    unsigned long long fileSize;
     for(int i = 0; i < chunksCount; ++i) {
         std::cout<< "przed memset "<<std::endl;
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
@@ -381,14 +381,17 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
             exit(EXIT_FAILURE);
         }
         std::cout<< "przed deserialize rbuf: "<<rbuf<<std::endl;
-        ChunkTransfer message = ChunkTransfer::deserializeChunkTransfer(rbuf);
-        std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
-        if (message.header == CHUNK_TRANSFER) {
+        fileSize = ongoingDownloadingFiles.at(filepath).getSize();
+        std::optional<ChunkTransfer> messageOpt = ChunkTransfer::deserializeChunkTransfer(rbuf, fileSize);
+        if (messageOpt.has_value()){
+            ChunkTransfer message = messageOpt.value();
+            std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
+
             tcpObj->sendHeader(sock, CHUNK_TRANSFER_OK);
             std::cout<< "przed write "<<std::endl;
             ongoingDownloadingFiles.at(filepath).write(message.payload, message.index);
             std::cout<< "po write "<<std::endl;
-        } else {
+        }else {
             throw std::runtime_error("receive chunks bad header");
         }
 
