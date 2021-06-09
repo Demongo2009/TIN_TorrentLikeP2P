@@ -396,11 +396,6 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
             exit(EXIT_FAILURE);
         }
 
-        if (recv(sock, chunk, sizeof(chunk), 0) < 0) {
-            perror("receive error");
-            exit(EXIT_FAILURE);
-        }
-
 //        std::cout<< "przed deserialize rbuf: "<<rbuf<<std::endl;
         fileSize = ongoingDownloadingFiles.at(filepath).getSize();
         std::optional<ChunkTransfer> messageOpt = ChunkTransfer::deserializeChunkTransfer(rbuf, fileSize);
@@ -409,7 +404,7 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
 //            std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
             std::cout<< " got chunk idx "<< message.index << std::endl;
             tcpObj->sendHeader(sock, CHUNK_TRANSFER_OK);
-            ongoingDownloadingFiles.at(filepath).write(chunk, message.index);
+            ongoingDownloadingFiles.at(filepath).write(message.payload, message.index);
         }else {
             throw std::runtime_error("receive chunks bad header");
         }

@@ -112,11 +112,11 @@ enum ClientCommand {
 struct ChunkTransfer{
     TcpMessageCode header;
     unsigned long index;
-//    char payload[CHUNK_SIZE + 1];
+    char payload[CHUNK_SIZE + 1];
     ChunkTransfer( TcpMessageCode header, unsigned long index): header(header), index(index){
 //        memcpy(this->payload, payload, payloadSize);
-//        strncpy(this->payload, payload, strlen(payload) );
-//        this->payload[strlen(payload)] = '\0';
+        strncpy(this->payload, payload, strlen(payload) );
+        this->payload[strlen(payload)] = '\0';
 
     }
     static std::optional<ChunkTransfer> deserializeChunkTransfer(const char *message, unsigned long long fileSize) {
@@ -135,29 +135,14 @@ struct ChunkTransfer{
         }
         if( std::stoi(headerStr) != CHUNK_TRANSFER )
             return std::nullopt;
-        std::cout<< "TO CHUNK TRANSFER HEADER "<<std::endl;
         currCharacter=message[++charIndex];
         while (isdigit(currCharacter)){
             currentIndex+=currCharacter;
             currCharacter=message[++charIndex];
         }
         ++charIndex;
-////        std::cout<< "w deserialize charindex:"<<charIndex<<"message"<<message<<std::endl;
-//        strncpy( payload, message + charIndex, strlen(message) - charIndex );
-//        payload[strlen(message) - charIndex] = '\0';
-////        int payloadSize, c = CHUNK_SIZE, m = MAX_MESSAGE_SIZE;
-////        long offset = index * c;
-////        if (offset + c <= fileSize) {
-////            payloadSize = c;
-////        } else {
-////            payloadSize = fileSize - offset;
-////        }
-////        std::cout<< "Bedzie kopiowane tyle "<< payloadSize<<std::endl;
-////        memcpy( payload, message + charIndex, payloadSize);
-//
-////        payload[strlen(message) - charIndex] = '\0';
-////        std::cout<< "w deserialize przed return charindex:"<<charIndex<<"message"<<message<<std::endl;
-////        std::cout<< "w deserialize payloadsize:"<<payloadSize<<" payload:"<<payload<<std::endl;
+        strncpy( payload, message + charIndex, strlen(message) - charIndex );
+        payload[strlen(message) - charIndex] = '\0';
         return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex));
     }
 };
