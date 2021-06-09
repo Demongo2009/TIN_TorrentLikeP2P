@@ -257,6 +257,7 @@ void CliThread::handleDownloadResource(const std::string& resourceName, const st
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
+    std::cout<<"1. job start"<<std::endl;
     sharedStructs.localResourcesMutex.lock();
     auto it = sharedStructs.localResources.find(resourceName);
     if( it != sharedStructs.localResources.end()){
@@ -269,6 +270,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     struct sockaddr_in addr{};
     std::vector<struct sockaddr_in> peersPossessingResource;
     unsigned long long fileSize;
+    std::size_t revokeHash;
     for(auto& [peerAddress, resources] : sharedStructs.networkResources){
         it = resources.find(resourceName);
         if( it != resources.end()){
@@ -277,6 +279,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
             addr.sin_family = AF_INET;
             peersPossessingResource.emplace_back(addr);
             fileSize = it->second.sizeInBytes;
+            revokeHash = it->second.revokeHash;
         }
     }
     sharedStructs.networkResourcesMutex.unlock();
@@ -284,9 +287,9 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
         std::cout<<"NONE IS IN POSSESSION OF THIS RESOURCE "<< resourceName<< std::endl;
         return;
     }
-    std::cout<<"count peers"<<peersPossessingResource.size()<<std::endl;
+    std::cout<<"2. count peers"<<peersPossessingResource.size()<<std::endl;
     std::vector<std::vector<int> > chunkIndices = prepareChunkIndices(peersPossessingResource.size(), fileSize);
-    std::cout<<"count chunk indices"<<chunkIndices.size()<<std::endl;
+    std::cout<<"3. count chunk indices"<<chunkIndices.size()<<std::endl;
 //    for(auto& indices: chunkIndices){
 //        std::cout<<"PEER indices: "<<std::endl;
 //        for(auto& i : indices){
@@ -299,13 +302,14 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     file.reserveFile(fileSize);
     ongoingDownloadingFiles.insert(std::make_pair(filepath, file));
     for(int i = 0; i < chunkIndices.size(); ++i){
+        std::cout<<"4. START THREAD for: "<<inet_ntoa(peersPossessingResource[i].sin_addr)<<std::endl;
         threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath);
     }
     for(auto & thread: threads){
         thread.join();
     }
     ongoingDownloadingFiles.erase(filepath);
-    ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize);
+    ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize, revokeHash);
     sharedStructs.localResourcesMutex.lock();
     sharedStructs.localResources[resourceName] = downloadedResource;
     sharedStructs.localResourcesMutex.unlock();
@@ -323,6 +327,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     if(connect(sock, (struct sockaddr *) &sockaddr, sizeof sockaddr) < 0){
         throw std::runtime_error("connect fail");
     }
+    std::cout<<"5. connected to"<< inet_ntoa(sockaddr.sin_addr)<< " socket: "<< sock <<std::endl;
     openSockets.insert(sock);
     int chunksCount = 0;
     for(const auto& index : chunksIndices){
@@ -331,17 +336,21 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
             snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
-            std::cout<<"\n\nSENDING: "<<sbuf<<std::endl;
+            std::cout<<"6. SENDING request: "<<sbuf<<" to "<< sock <<std::endl;
             if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("send");
             }
             ss.str("");
             if(first){
-                tcpObj->receiveSync(sock, sockaddr);
+                bool a = tcpObj->receiveSync(sock, sockaddr);
+                std::cout<<"7. RECEIVED SYNC: "<<a<<" to "<< sock <<std::endl;
                 tcpObj->sendSync(sock);
+                std::cout<<"8. Sent SYNC: "<<a<<" to "<< sock <<std::endl;
                 first = false;
             }
+            std::cout<<"9. RECEIVING CHUNKS count : "<<chunksCount<<" from "<< sock <<std::endl;
             receiveChunks(sock, chunksCount, filepath);
+
             chunksCount = 0;
         }
         ++chunksCount;
@@ -353,23 +362,29 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     memset(payload, 0 , sizeof(payload));
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
-    std::cout<<"\n\nSENDING: "<<sbuf<<std::endl;
+    std::cout<<"10. SENDING request: "<<sbuf<<" to "<< sock <<std::endl;
     if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
         errno_abort("send");
     }
     if(first){
-        tcpObj->receiveSync(sock,sockaddr);
+
+        bool a = tcpObj->receiveSync(sock,sockaddr);
+        std::cout<<"11. RECEIVED SYNC: "<<a<<" to "<< sock <<std::endl;
         tcpObj->sendSync(sock);
+        std::cout<<"12. Sent SYNC: "<<a<<" to "<< sock <<std::endl;
         std::cout<<"poszlo"<<std::endl;
     }
+    std::cout<<"13. RECEIVING CHUNKS count : "<<chunksCount<<" from "<< sock <<std::endl;
     receiveChunks(sock, chunksCount, filepath);
     close(sock);
+    std::cout<<"14. DONE: "<<std::endl;
     openSockets.erase(sock);
 }
 
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
     char rbuf[MAX_MESSAGE_SIZE];
+    char chunk[CHUNK_SIZE];
     unsigned long long fileSize;
     for(int i = 0; i < chunksCount; ++i) {
         std::cout<< "przed memset "<<std::endl;
@@ -380,17 +395,21 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
             perror("receive error");
             exit(EXIT_FAILURE);
         }
-        std::cout<< "przed deserialize rbuf: "<<rbuf<<std::endl;
+
+        if (recv(sock, chunk, sizeof(chunk), 0) < 0) {
+            perror("receive error");
+            exit(EXIT_FAILURE);
+        }
+
+//        std::cout<< "przed deserialize rbuf: "<<rbuf<<std::endl;
         fileSize = ongoingDownloadingFiles.at(filepath).getSize();
         std::optional<ChunkTransfer> messageOpt = ChunkTransfer::deserializeChunkTransfer(rbuf, fileSize);
         if (messageOpt.has_value()){
             ChunkTransfer message = messageOpt.value();
-            std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
-
+//            std::cout<<"\n\n\n\n\n\n\n"<<message.header << "  "<< message.index << "payload: " << message.payload<< std::endl;
+            std::cout<< " got chunk idx "<< message.index << std::endl;
             tcpObj->sendHeader(sock, CHUNK_TRANSFER_OK);
-            std::cout<< "przed write "<<std::endl;
-            ongoingDownloadingFiles.at(filepath).write(message.payload, message.index);
-            std::cout<< "po write "<<std::endl;
+            ongoingDownloadingFiles.at(filepath).write(chunk, message.index);
         }else {
             throw std::runtime_error("receive chunks bad header");
         }

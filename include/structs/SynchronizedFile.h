@@ -20,7 +20,7 @@ public:
 
     void write(const char * data, unsigned int index){
         std::lock_guard<std::mutex> lock(writerMutex);
-        std::ofstream ofs (filename, std::ios::in | std::ofstream::out | std::ofstream::binary);
+        std::ofstream ofs (filename, std::ios::in | std::ofstream::out);
         int c = CHUNK_SIZE;
         long offset = index * c;
         ofs.seekp(offset, std::ios::beg);

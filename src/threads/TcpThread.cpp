@@ -12,6 +12,7 @@
 #include <fstream>
 #include <cmath>
 #include <vector>
+#include <cstdio>
 #include "../../include/threads/TcpThread.h"
 #include "../../include/utils.h"
 
@@ -184,7 +185,9 @@ void TcpThread::demandChunkJob(char *payload, int socket){
 void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     std::cout<<"sendchunks"<<std::endl;
     std::string filepath = sharedStructs.filepaths.at(message.resourceName);
-    std::ifstream ifs {filepath, std::ios::in | std::ios_base::binary};
+    FILE *picture;
+    picture = fopen(filepath.c_str(), "r");
+    std::ifstream ifs {filepath, std::ios::in };
     sharedStructs.localResourcesMutex.lock();
     long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     sharedStructs.localResourcesMutex.unlock();
@@ -194,24 +197,30 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     int nToWrite;
     for(const auto & index : message.chunkIndices) {
         long offset = index * c;
-        ifs.seekg(offset, std::ios::beg);
+//        ifs.seekg(offset, std::ios::beg);
+        fseek(picture, offset, SEEK_SET);
         memset(chunk, 0, CHUNK_SIZE);
         if (offset + c <= fileSize) {
-            ifs.read(chunk, CHUNK_SIZE);
+//            ifs.read(chunk, CHUNK_SIZE);
+            fread(chunk, 1, sizeof(chunk), picture);
             nToWrite = c;
         } else {
             std::cout<<"ile: "<<fileSize - offset << std::endl;
             ifs.read(chunk, fileSize - offset);
-            chunk[fileSize - offset] = '\0';
+            fread(chunk, 1, fileSize - offset, picture);
+//            chunk[fileSize - offset] = '\0';
             nToWrite = fileSize - offset;
         }
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%lu;", CHUNK_TRANSFER, index);
-        std::cout<<"sbuf przed"<<sbuf<<"ntowrite"<<nToWrite<<std::endl;
-        memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
-        std::cout<<"sbuf po: "<< sbuf<<std::endl;
-        std::cout<<"chunk"<<chunk<<std::endl;
+//        std::cout<<"sbuf przed"<<sbuf<<"ntowrite"<<nToWrite<<std::endl;
+//        memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
+//        std::cout<<"sbuf po: "<< sbuf<<std::endl;
+//        std::cout<<"chunk"<<chunk<<std::endl;
         if (send(socket, sbuf, MAX_MESSAGE_SIZE, 0) < 0) {
+            errno_abort("send chunk");
+        }
+        if (send(socket, chunk, CHUNK_SIZE, 0) < 0) {
             errno_abort("send chunk");
         }
         receiveHeader(socket, CHUNK_TRANSFER_OK);
