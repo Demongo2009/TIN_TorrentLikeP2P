@@ -81,6 +81,12 @@ int TcpThread::acceptClient() {
 void TcpThread::receive(int socket){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
+	int error_code;
+	int error_code_size = sizeof(error_code);
+	if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
+		std::cout << "Connection lost\n";
+		return;
+	}
     if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) <= 0) {
         if(connectedClients.find(socket)!= connectedClients.end()) {
             connectedClients.erase(socket);
@@ -199,6 +205,12 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%lu;", CHUNK_TRANSFER, index);
         memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
+		int error_code;
+		int error_code_size = sizeof(error_code);
+		if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
+			std::cout << "Connection lost\n";
+			return;
+		}
         if (send(socket, sbuf, MAX_MESSAGE_SIZE, 0) < 0) {
             errno_abort("send chunk");
         }
@@ -241,6 +253,12 @@ void TcpThread::sendSync(int socket){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
             memset(sbuf, 0 , sizeof(sbuf));
             snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
+			int error_code;
+			int error_code_size = sizeof(error_code);
+			if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
+				std::cout << "Connection lost\n";
+				return;
+			}
             if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
                 errno_abort("sync");
             }
@@ -255,7 +273,12 @@ void TcpThread::sendSync(int socket){
     memset(payload, 0 , sizeof(payload));
     snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
     snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
-
+	int error_code;
+	int error_code_size = sizeof(error_code);
+	if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
+		std::cout << "Connection lost\n";
+		return;
+	}
     if (send(socket, sbuf, strlen(sbuf) + 1, 0) <= 0) {
         errno_abort("sync");
     }
@@ -300,6 +323,12 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
                 sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
             }
             sharedStructs.networkResourcesMutex.unlock();
+			int error_code;
+			int error_code_size = sizeof(error_code);
+			if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
+				std::cout << "Connection lost\n";
+				return false;
+			}
             sendHeader(socket, SYNC_OK);
         } else if(std::stoi(header) == SYNC_END){
             return true;
