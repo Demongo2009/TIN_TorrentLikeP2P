@@ -3,9 +3,18 @@
 
 #include <string>
 #include <vector>
-#include "../structs/Message.h"
 
 const int MAX_FILE_NAME_SIZE = 256;
+
+enum ClientCommand {
+    ADD_NEW_RESOURCE,
+    LIST_AVAILABLE_RESOURCES,
+    FIND_RESOURCE,
+    DOWNLOAD_RESOURCE,
+    REVOKE_RESOURCE,
+    EXIT,
+    UNKNOWN
+};
 
 class CliParser {
 public:

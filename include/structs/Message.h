@@ -33,19 +33,6 @@ enum UdpMessageCode {
     NODE_LEFT_NETWORK=130,
 };
 
-enum ClientCommand {
-    ADD_NEW_RESOURCE,
-    LIST_AVAILABLE_RESOURCES,
-    FIND_RESOURCE,
-    DOWNLOAD_RESOURCE,
-    REVOKE_RESOURCE,
-    EXIT,
-    UNKNOWN
-};
-
-
-
-
  struct DemandChunkMessage {
     std::string resourceName;
     std::vector<unsigned long> chunkIndices;
@@ -55,50 +42,7 @@ enum ClientCommand {
                             resourceName(std::move(resourceName)),
                             chunkIndices(std::move(chunkIndices)) {}
 
-     static DemandChunkMessage deserializeChunkMessage(const char *message) {
-         std::string name;
-         std::vector<unsigned long> indices;
-         unsigned short charIndex=0;
-         char currCharacter=message[charIndex];
-
-         while(currCharacter && currCharacter!=SEPARATOR){
-             name+=currCharacter;
-             currCharacter=message[++charIndex];
-         }
-
-         if(!currCharacter) {
-             throw std::runtime_error("unexpected end of serialized data while reading chunk message name");
-         }
-         currCharacter=message[++charIndex];
-
-         std::string currentIndex;
-
-         while(currCharacter){
-             if(isdigit(currCharacter)){
-                 currentIndex+=currCharacter;
-             } else if(currCharacter==SEPARATOR){
-                 try {
-                     indices.push_back(std::stoul(currentIndex));
-                 }
-                 catch(std::exception& exception){
-                     throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
-                 }
-                 currentIndex="";
-             } else{
-                 throw std::runtime_error("Unexpected character while reading chunk message indices");
-             }
-             currCharacter=message[++charIndex];
-         }
-         if(!std::empty(currentIndex)){
-             try {
-                 indices.push_back(std::stoul(currentIndex));
-             }
-             catch(std::exception& exception){
-                 throw std::runtime_error("Exceeded uint limit or invalid character while reading index");
-             }
-         }
-         return DemandChunkMessage(name, indices);
-     }
+     static DemandChunkMessage deserializeChunkMessage(const char *message);
 
 };
 struct ChunkTransfer{
@@ -110,30 +54,6 @@ struct ChunkTransfer{
         this->payload[strlen(payload)] = '\0';
 
     }
-    static std::optional<ChunkTransfer> deserializeChunkTransfer(const char *message, unsigned long long fileSize) {
-        char payload[(CHUNK_SIZE) + 1];
-        memset(payload, 0, sizeof payload);
-        unsigned short charIndex=0;
-        char currCharacter=message[charIndex];
-
-
-        std::string currentIndex, headerStr;
-        while (isdigit(currCharacter)){
-            headerStr+=currCharacter;
-            currCharacter=message[++charIndex];
-        }
-        if( std::stoi(headerStr) != CHUNK_TRANSFER ) {
-            return std::nullopt;
-        }
-        currCharacter=message[++charIndex];
-        while (isdigit(currCharacter)){
-            currentIndex+=currCharacter;
-            currCharacter=message[++charIndex];
-        }
-        ++charIndex;
-        strncpy( payload, message + charIndex, strlen(message) - charIndex );
-        payload[strlen(message) - charIndex] = '\0';
-        return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex), payload);
-    }
+    static std::optional<ChunkTransfer> deserializeChunkTransfer(const char *message, unsigned long long fileSize);
 };
 #endif //TIN_TORRENTLIKEP2P_MESSAGE_H
