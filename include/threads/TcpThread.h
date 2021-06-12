@@ -1,7 +1,3 @@
-//
-// Created by bartlomiej on 03.06.2021.
-//
-
 #ifndef TIN_TORRENTLIKEP2P_TCPTHREAD_H
 #define TIN_TORRENTLIKEP2P_TCPTHREAD_H
 
@@ -23,17 +19,17 @@ public:
     static void start(TcpThread* tcpObj){
     	tcpObj->runTcpServerThread();
     }
+    void terminate();
+    void initTcp();
     void runTcpServerThread();
 
     bool receiveSync(int socket, std::optional<struct sockaddr_in> sockaddr);
-
     void sendSync(int socket);
-    void terminate();
+
 
 	void setBarrier(pthread_barrier_t *ptr);
-	void initTcp();
-    static void sendHeader(int socket, TcpMessageCode code);
     bool receiveHeader(int socket, TcpMessageCode code);
+    static void sendHeader(int socket, TcpMessageCode code);
 private:
     bool keepGoing;
     SharedStructs& sharedStructs;
@@ -44,25 +40,16 @@ private:
 	pthread_barrier_t* barrier;
 
 
-
     int acceptClient();
-
     void receive(int socket);
 
-
-
     void handleTcpMessage(char *header, char *payload, int socket);
-
-
     void demandChunkJob(char *payload, int sockaddr);
-
     void sendChunks(const DemandChunkMessage &message, int socket);
-
-
     void clearPeerInfo(struct sockaddr_in sockaddr);
     bool validateChunkDemand(const DemandChunkMessage& message);
 
-
+    static void printTcpThreadMessage(std::string);
 };
 
 #endif //TIN_TORRENTLIKEP2P_TCPTHREAD_H

@@ -1,6 +1,3 @@
-//
-// Created by bartlomiej on 03.06.2021.
-//
 #include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -41,7 +38,7 @@ void TcpThread::initTcp(){
         close(tcpSocket);
         exit(1);
     }
-    std::cout<<"Listening"<<std::endl;
+    printTcpThreadMessage("Listening");
 
 	pthread_barrier_wait(barrier);
 }
@@ -56,7 +53,7 @@ void TcpThread::terminate(){
 }
 
 int TcpThread::acceptClient() {
-    printf("waiting for client...\n");
+    printTcpThreadMessage("waiting for client...");
     struct sockaddr_in clientAddr{};
     socklen_t size = sizeof(clientAddr);
     int clientSocket = accept(tcpSocket, (struct sockaddr *) &clientAddr, &size);
@@ -69,8 +66,8 @@ int TcpThread::acceptClient() {
     int currentReturnCode = getpeername(clientSocket, (struct sockaddr *) &clientAddr, &size);
     if (currentReturnCode == -1){
         printf("GETPEERNAME ERROR: %s\n", strerror(errno));
-    }
-    else {
+        return -1;
+    }else {
         std::cout<<"Client address: "<< inet_ntoa(clientAddr.sin_addr)<< "socket: "<<clientSocket<<std::endl;
     }
     connectedClients.insert(std::make_pair(clientSocket, clientAddr));
@@ -89,7 +86,7 @@ void TcpThread::receive(int socket){
         return;
     }
 
-    printf("recv: %s\n", rbuf);
+    printTcpThreadMessage(std::string("recv: %s\n") + rbuf);
 
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
@@ -100,13 +97,11 @@ void TcpThread::receive(int socket){
     try {
         handleTcpMessage(header, payload, socket);
     }catch (std::exception& e ){
-        std::cout<<"tcp catch: "<< e.what()<<std::endl;
+        printTcpThreadMessage(std::string("tcp catch: ") + e.what());
     }
-
 }
 
 void TcpThread::runTcpServerThread() {
-
     initTcp();
 
     while (keepGoing) {
@@ -126,7 +121,7 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
             if(receiveSync(socket, std::nullopt)) {
                 connectedClients.at(socket).isSync = true;
             } else{
-                std::cout<<"sync error"<<std::endl;
+                printTcpThreadMessage("sync error");
                 return;
             }
         }
@@ -145,15 +140,14 @@ bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
         sharedStructs.localResourcesMutex.unlock();
         return false;
     }
-    long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
+    unsigned long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     int c = CHUNK_SIZE;
     for(const auto & index : message.chunkIndices) {
         long offset = index * c;
-        if (offset > fileSize){//todo może >= nie chce mi się myśleć
+        if (offset > fileSize){
             sharedStructs.localResourcesMutex.unlock();
             return false;
         }
-
     }
     sharedStructs.localResourcesMutex.unlock();
     return true;
@@ -163,28 +157,29 @@ void TcpThread::demandChunkJob(char *payload, int socket){
     DemandChunkMessage message = DemandChunkMessage::deserializeChunkMessage(payload);
     ResourceInfo resource;
     if(!validateChunkDemand(message)){
-        std::cout<<"invlid chunk request"<< message.resourceName << message.chunkIndices[0] <<std::endl;
+        std::cout<<"invalid chunk request"<< message.resourceName << message.chunkIndices[0] <<std::endl;
         sendHeader(socket, INVALID_CHUNK_REQUEST);
         close(socket);
         return;
     }
     sendChunks(message, socket);
-
 }
 
 
 void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     std::string filepath = sharedStructs.filepaths.at(message.resourceName);
     std::ifstream ifs {filepath, std::ios::in };
+
     sharedStructs.localResourcesMutex.lock();
-    long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
+    unsigned long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     sharedStructs.localResourcesMutex.unlock();
+
     char chunk[CHUNK_SIZE];
     char sbuf[MAX_MESSAGE_SIZE] = {};
     int c = CHUNK_SIZE;
     int nToWrite;
     for(const auto & index : message.chunkIndices) {
-        long offset = index * c;
+        unsigned long offset = index * c;
         ifs.seekg(offset, std::ios::beg);
 
         memset(chunk, 0, CHUNK_SIZE);
@@ -227,7 +222,7 @@ bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
     if(std::stoi(header) == code){
         return true;
     }
-    std::cout<<"bad receive header"<< std::stoi(header)<<std::endl;
+    printTcpThreadMessage(std::string("bad receive header: ") + header);
     return false;
 }
 
@@ -261,7 +256,7 @@ void TcpThread::sendSync(int socket){
     }
     receiveHeader(socket, SYNC_OK);
     sendHeader(socket, SYNC_END);
-    std::cout<<"sent: "<<sbuf<<std::endl;
+    printTcpThreadMessage(std::string("sent: ") + sbuf);
 }
 
 void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
@@ -314,4 +309,8 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
 
 void TcpThread::setBarrier(pthread_barrier_t *ptr) {
 	barrier = ptr;
+}
+
+void TcpThread::printTcpThreadMessage(std::string message) {
+    std::cout<<"\t TCP THREAD:" <<message<<std::endl;
 }

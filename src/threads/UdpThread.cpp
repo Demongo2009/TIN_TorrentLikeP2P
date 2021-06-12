@@ -1,6 +1,3 @@
-//
-// Created by bartlomiej on 03.06.2021.
-//
 #include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -16,6 +13,8 @@
 #include "../../include/utils.h"
 #include "../../include/threads/UdpThread.h"
 
+const char* LOCALHOST_ADDRESS = "127.0.0.1";
+const char* BROADCAST_ADDRESS = "255.255.255.255";
 
 void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr) {
     switch (std::stoi(header)) {
@@ -37,19 +36,21 @@ void UdpThread::handleUdpMessage(char *header, char *payload, sockaddr_in sockad
         case NODE_LEFT_NETWORK:
             handleNodeLeftNetwork(sockaddr);
             break;
+        default:
+            throw std::runtime_error("Unhandled UDP message!");
     }
 }
 
 void UdpThread::runUdpServerThread() {
-
     initUdp();
+
 	pthread_barrier_wait(barrier);
     broadcastNewNode();
     while (keepGoing){
         try {
             receive();
         }catch(std::exception& e ){
-            std::cout<<"udp catch: "<<e.what()<<std::endl;
+            std::cout<<"UDP catch: "<<e.what()<<std::endl;
         }
     }
 }
@@ -62,40 +63,43 @@ void UdpThread::terminate(){
 }
 
 void UdpThread::receive(){
-    char rbuf[MAX_MESSAGE_SIZE];
-    memset(rbuf, 0, MAX_MESSAGE_SIZE);
+    char receiveBuf[MAX_MESSAGE_SIZE];
+    memset(receiveBuf, 0, MAX_MESSAGE_SIZE);
     struct sockaddr_in clientAddr{};
+
     socklen_t clientLength = sizeof(sockaddr_in);
-    if (recvfrom(udpSocket, rbuf, sizeof(rbuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
+    if (recvfrom(udpSocket, receiveBuf, sizeof(receiveBuf) - 1, 0,(struct sockaddr *) &clientAddr, &clientLength) < 0) {
         perror("receive error");
         exit(EXIT_FAILURE);
     }
     clientAddr.sin_port = (in_port_t) htons(port);
-    printf("recv: %s\n", rbuf);
+
+    printUdpThreadMessage(std::string("Received: ") + receiveBuf);
+
 
     char header[HEADER_SIZE];
     char payload[MAX_SIZE_OF_PAYLOAD];
     memset(header, 0, HEADER_SIZE);
     memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
-    snprintf(header, HEADER_SIZE, "%s", rbuf);
-    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", rbuf+HEADER_SIZE);
+
+    snprintf(header, HEADER_SIZE, "%s", receiveBuf);
+    snprintf(payload, MAX_SIZE_OF_PAYLOAD, "%s", receiveBuf+HEADER_SIZE);
     std::string clientAddressString = inet_ntoa(clientAddr.sin_addr);
-    if(clientAddressString != myAddress && clientAddressString != "127.0.0.1"){
+    if(clientAddressString != myAddress && clientAddressString != LOCALHOST_ADDRESS){
         handleUdpMessage(header, payload, clientAddr);
     }
 
 }
 
 void UdpThread::initUdp() {
-
     int trueFlag = 1;
     if ((udpSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        errno_abort("socket");
+        errno_abort("socket initUdp()");
     }
     myAddress = getMyAddress(udpSocket);
 
     if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof trueFlag) < 0) {
-        errno_abort("setsockopt");
+        errno_abort("setsockopt initUdp()");
     }
 
     memset(&recv_addr, 0, sizeof recv_addr);
@@ -119,8 +123,8 @@ void UdpThread::initUdp() {
     memset(&broadcastAddress, 0, sizeof broadcastAddress);
     broadcastAddress.sin_family = AF_INET;
     broadcastAddress.sin_port = (in_port_t) htons(port);
-    // broadcasting address for unix (?)
-    inet_aton("255.255.255.255", &broadcastAddress.sin_addr);
+
+    inet_aton(BROADCAST_ADDRESS, &broadcastAddress.sin_addr);
 
 }
 
@@ -131,11 +135,8 @@ void UdpThread::genericBroadcast(UdpMessageCode code, const char *payload) const
         return;
     }
     snprintf(sbuf, sizeof(sbuf), "%d;%s", code, payload);
-    if(broadcastSocket == 0){
-    	std::cout<<"!\n";
-    }
     if (sendto(broadcastSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &broadcastAddress, sizeof broadcastAddress) < 0) {
-        errno_abort("send");
+        errno_abort("send genericBroadcast()");
     }
 
 }
@@ -176,7 +177,6 @@ void UdpThread::broadcastLogout(){
 }
 
 
-//te funkcje handlujące nie tworzą nowych nitek deserializacja i aktualizacja struktur
 void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
     sharedStructs.networkResourcesMutex.lock();
@@ -236,6 +236,7 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
     sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
+
     for(const auto& [resourceName, resource] : sharedStructs.localResources){
         if(ss.str().size() + resourceName.size() + sizeof(long) + sizeof(int) > MAX_SIZE_OF_PAYLOAD){
             snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
@@ -246,7 +247,9 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
             }
             ss.str("");
         }
-        ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
+        ss << resource.resourceName  << SEPARATOR
+        << resource.revokeHash  << SEPARATOR
+        << resource.sizeInBytes  << SEPARATOR;
     }
 
     sharedStructs.localResourcesMutex.unlock();
@@ -262,4 +265,8 @@ void UdpThread::sendMyState(sockaddr_in newPeer) {
 
 void UdpThread::setBarrier(pthread_barrier_t *ptr) {
 	barrier = ptr;
+}
+
+void UdpThread::printUdpThreadMessage(std::string message) {
+    std::cout<<"\tUDP THREAD:"<<message<<std::endl;
 }
