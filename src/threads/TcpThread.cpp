@@ -172,9 +172,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     std::string filepath = sharedStructs.filepaths.at(message.resourceName);
     std::ifstream ifs {filepath, std::ios::in };
 
-    sharedStructs.localResourcesMutex.lock();
-    unsigned long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
-    sharedStructs.localResourcesMutex.unlock();
+    unsigned long fileSize = sharedStructs.getFileSize(message.resourceName);
 
     char chunk[CHUNK_SIZE];
     char sbuf[MAX_MESSAGE_SIZE] = {};
@@ -279,9 +277,7 @@ void TcpThread::sendSync(int socket){
 }
 
 void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
-    sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.deleteNetworkNode(sockaddr);
 }
 
 bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockaddrOpt ){
@@ -308,11 +304,14 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
             memset(payload, 0, MAX_SIZE_OF_PAYLOAD);
             snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE);
             std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(payload);
-            sharedStructs.networkResourcesMutex.lock();
-            for(const auto & r : resources){
-                sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
-            }
-            sharedStructs.networkResourcesMutex.unlock();
+
+            //TODO: sprawdzic czy to jest dobrze
+            sharedStructs.registerNewNodeWithItsResources(sockaddr, resources);
+//            sharedStructs.networkResourcesMutex.lock();
+//            for(const auto & r : resources){
+//                sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
+//            }
+//            sharedStructs.networkResourcesMutex.unlock();
 			int error_code;
 			int error_code_size = sizeof(error_code);
 			if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){

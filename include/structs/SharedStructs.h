@@ -17,12 +17,14 @@ struct SharedStructs{
     void addNetworkResource(sockaddr_in, const ResourceInfo&);
     void revokeResource(const ResourceInfo&);
     void deleteResourceFromNode(sockaddr_in, const ResourceInfo&);
-    //4. addNewNode
-    //5. actualizeNodeState
-    //....
+    void addNetworkNode(sockaddr_in);
+    void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& ); //zarowno TCP jak i UDP
+    void deleteNetworkNode(sockaddr_in);
+    std::string getMyStateString();
 
     //TCP
-    //..
+    unsigned long getFileSize(const std::string&);
+
 
     //CLI
     //...

@@ -193,28 +193,17 @@ void UdpThread::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
 }
 
 void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
-    sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddressLong(sockaddr)] = std::map<std::string, ResourceInfo>();
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.addNetworkNode(sockaddr);
     sendMyState(sockaddr);
 }
 
 void UdpThread::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(message);
-    sharedStructs.networkResourcesMutex.lock();
-    if( resources.empty() ){
-        sharedStructs.networkResources[convertAddressLong(sockaddr)] = std::map<std::string, ResourceInfo>();
-    }
-    for(const auto & r : resources){
-        sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
-    }
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.registerNewNodeWithItsResources(sockaddr, resources);
 }
 
 void UdpThread::handleNodeLeftNetwork(sockaddr_in sockaddr) {
-    sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.deleteNetworkNode(sockaddr);
 }
 
 void UdpThread::sendMyState(sockaddr_in newPeer) {
