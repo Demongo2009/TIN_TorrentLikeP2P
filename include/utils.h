@@ -1,7 +1,3 @@
-//
-// Created by bartlomiej on 03.06.2021.
-//
-
 #ifndef TIN_TORRENTLIKEP2P_UTILS_H
 #define TIN_TORRENTLIKEP2P_UTILS_H
 

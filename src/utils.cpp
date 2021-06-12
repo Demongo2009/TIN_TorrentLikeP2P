@@ -1,6 +1,3 @@
-//
-// Created by bartlomiej on 03.06.2021.
-//
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <ifaddrs.h>

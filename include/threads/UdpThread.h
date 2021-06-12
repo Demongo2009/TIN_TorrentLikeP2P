@@ -1,7 +1,3 @@
-//
-// Created by bartlomiej on 03.06.2021.
-//
-
 #ifndef TIN_TORRENTLIKEP2P_UDPTHREAD_H
 #define TIN_TORRENTLIKEP2P_UDPTHREAD_H
 
@@ -19,18 +15,17 @@ class UdpThread{
 public:
     explicit UdpThread(SharedStructs& structs) : sharedStructs(structs), keepGoing(true){}
 
+    void initUdp();
+    void terminate();
+    void setBarrier(pthread_barrier_t *ptr);
 	static void start(UdpThread* udpObj){
     	udpObj->runUdpServerThread();
     }
     void runUdpServerThread();
 
     void broadcastNewFile(const ResourceInfo& resource);
-
     void broadcastRevokeFile(const std::string& resource);
-    void terminate();
 
-	void setBarrier(pthread_barrier_t *ptr);
-	void initUdp();
 
 private:
     SharedStructs& sharedStructs;
@@ -44,25 +39,23 @@ private:
     pthread_barrier_t* barrier;
 
     void receive();
-    //broadcast functions
+
     void genericBroadcast(UdpMessageCode code, const char* payload) const;
     void broadcastNewNode();
-
     void broadcastFileDeleted(const ResourceInfo& resource);
     void broadcastLogout();
 
-//functions handling broadcasted messages - UDP server
     void handleNewResourceAvailable(char *message, sockaddr_in sockaddr);
     void handleOwnerRevokedResource(char *message);
     void handleNodeDeletedResource(char *message, sockaddr_in sockaddr);
-
     void handleStateOfNode(char *message, sockaddr_in sockaddr);
     void handleNodeLeftNetwork(sockaddr_in sockaddr);
     void handleUdpMessage(char *header, char *payload, sockaddr_in sockaddr);
-
     void handleNewNodeInNetwork(sockaddr_in sockaddr);
 
     void sendMyState(sockaddr_in in);
+
+    static void printUdpThreadMessage(std::string);
 };
 
 #endif //TIN_TORRENTLIKEP2P_UDPTHREAD_H

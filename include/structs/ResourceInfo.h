@@ -34,19 +34,18 @@ struct ResourceInfo {
             currCharacter=message[++charIndex];
         }
 
-        //sprawdzanie czy nie ma konca pliku tam gdzie sie go nie spodziewamy
-        if(!currCharacter)
+        if(!currCharacter) {
             return ResourceInfo(resourceName);
-
+        }
 		currCharacter=message[++charIndex];
 		std::string revokeHashBuilder;
 
-		//do wektora to czekamy na albo NULL albo na srednik (;)
 		while(currCharacter && currCharacter!=';'){
-			if(isdigit(currCharacter))
-				revokeHashBuilder+=currCharacter;
-			else
-				throw std::runtime_error("invalid number while reading revoking hash (character is not a digit): ");
+			if(isdigit(currCharacter)) {
+                revokeHashBuilder += currCharacter;
+            }else {
+                throw std::runtime_error("invalid number while reading revoking hash (character is not a digit): ");
+            }
 			currCharacter=message[++charIndex];
 		}
 
@@ -57,16 +56,19 @@ struct ResourceInfo {
 		catch (std::exception& exception){
 			throw std::runtime_error("exceeded number value limit or invalid character read while reading resource revoke hash");
 		}
-		if(!currCharacter)
-			throw std::runtime_error("unexpected end of serialized data while reading resource name");
-        currCharacter=message[++charIndex];
+		if(!currCharacter) {
+            throw std::runtime_error("unexpected end of serialized data while reading resource name");
+        }
+		currCharacter=message[++charIndex];
         std::string sizeBuilder;
 
         while(currCharacter && currCharacter!=';'){
-            if(isdigit(currCharacter))
-                sizeBuilder+=currCharacter;
-            else
+            if(isdigit(currCharacter)) {
+                sizeBuilder += currCharacter;
+            }
+            else {
                 throw std::runtime_error("invalid number while reading resource size (character is not a digit)");
+            }
             currCharacter=message[++charIndex];
         }
         try {
@@ -77,29 +79,29 @@ struct ResourceInfo {
         }
 
 
-        if(toVector)
-            *dataPointer+=charIndex;
-
-        if(charIndex > MAX_MESSAGE_SIZE)
+        if(toVector) {
+            *dataPointer += charIndex;
+        }
+        if(charIndex > MAX_MESSAGE_SIZE) {
             throw std::runtime_error("message exceeded maximum lenght!");
+        }
 
         return ResourceInfo(resourceName,
                             sizeInBytes,
                             revokeHash);
     }
 
-    static std::vector<ResourceInfo> deserializeVectorOfResources(char *message)
-    {
+    static std::vector<ResourceInfo> deserializeVectorOfResources(char *message){
         int charIndex = 0;
         std::vector<ResourceInfo> resources;
-        while (message[charIndex] && charIndex <= MAX_MESSAGE_SIZE)
-        {
+        while (message[charIndex] && charIndex <= MAX_MESSAGE_SIZE){
             resources.push_back(std::move(deserializeResource(message + charIndex, true, &charIndex)));
             charIndex++;
         }
 
-        if(charIndex > MAX_MESSAGE_SIZE)
+        if(charIndex > MAX_MESSAGE_SIZE) {
             throw std::runtime_error("message exceeded maximum lenght!");
+        }
 
         return resources;
     }
