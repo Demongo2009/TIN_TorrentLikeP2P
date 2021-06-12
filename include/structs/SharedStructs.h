@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <map>
+#include <netinet/in.h>
 #include "ResourceInfo.h"
 
 struct SharedStructs{
@@ -11,6 +12,21 @@ struct SharedStructs{
     std::mutex localResourcesMutex;
     std::mutex networkResourcesMutex;
     std::map<std::string, std::string> filepaths;
+
+    //UDP
+    void addNetworkResource(sockaddr_in, const ResourceInfo&);
+    void revokeResource(const ResourceInfo&);
+    void deleteResourceFromNode(sockaddr_in, const ResourceInfo&);
+    //4. addNewNode
+    //5. actualizeNodeState
+    //....
+
+    //TCP
+    //..
+
+    //CLI
+    //...
+
 
 };
 

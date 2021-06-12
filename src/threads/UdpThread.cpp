@@ -179,29 +179,17 @@ void UdpThread::broadcastLogout(){
 
 void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
-    sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddressLong(sockaddr)][resource.resourceName] = resource;
-    sharedStructs.networkResourcesMutex.unlock();
-
+    sharedStructs.addNetworkResource(sockaddr, resource);
 }
 
 void UdpThread::handleOwnerRevokedResource(char *message) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
-    sharedStructs.networkResourcesMutex.lock();
-    for(auto& resources: sharedStructs.networkResources){
-        auto it = resources.second.find(resource.resourceName);
-        if( it != resources.second.end()){
-            resources.second.erase(resource.resourceName);
-        }
-    }
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.revokeResource(resource);
 }
 
 void UdpThread::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
-    sharedStructs.networkResourcesMutex.lock();
-    sharedStructs.networkResources[convertAddressLong(sockaddr)].erase(resource.resourceName);
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.deleteResourceFromNode(sockaddr, resource);
 }
 
 void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
@@ -210,8 +198,6 @@ void UdpThread::handleNewNodeInNetwork(sockaddr_in sockaddr) {
     sharedStructs.networkResourcesMutex.unlock();
     sendMyState(sockaddr);
 }
-
-
 
 void UdpThread::handleStateOfNode(char *message, sockaddr_in sockaddr) {
     std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(message);
@@ -267,6 +253,6 @@ void UdpThread::setBarrier(pthread_barrier_t *ptr) {
 	barrier = ptr;
 }
 
-void UdpThread::printUdpThreadMessage(std::string message) {
+void UdpThread::printUdpThreadMessage(const std::string& message) {
     std::cout<<"\tUDP THREAD:"<<message<<std::endl;
 }

@@ -19,13 +19,9 @@ void TcpThread::initTcp(){
     tcpSocket = socket(PF_INET, SOCK_STREAM, 0);
     myAddress = getMyAddress(tcpSocket);
     serverAddr.sin_family = AF_INET;
-
     serverAddr.sin_port = htons(port);
     serverAddr.sin_addr.s_addr = inet_addr(myAddress.c_str());
-
-
     memset(serverAddr.sin_zero, 0, sizeof serverAddr.sin_zero);
-
     int returnCode = bind(tcpSocket, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
 
     if (returnCode == -1) {
@@ -149,7 +145,7 @@ bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
     unsigned long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
     int c = CHUNK_SIZE;
     for(const auto & index : message.chunkIndices) {
-        long offset = index * c;
+        unsigned long offset = index * c;
         if (offset > fileSize){
             sharedStructs.localResourcesMutex.unlock();
             return false;
@@ -183,7 +179,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
     char chunk[CHUNK_SIZE];
     char sbuf[MAX_MESSAGE_SIZE] = {};
     int c = CHUNK_SIZE;
-    int nToWrite;
+    unsigned int nToWrite;
     for(const auto & index : message.chunkIndices) {
         unsigned long offset = index * c;
         ifs.seekg(offset, std::ios::beg);
@@ -218,8 +214,8 @@ void TcpThread::sendHeader(int socket, TcpMessageCode code){
     char sbuf[HEADER_SIZE];
     memset(sbuf, 0, sizeof(sbuf));
     snprintf(sbuf, sizeof(sbuf), "%d", code);
-    int n;
-    if ( (n = send(socket, sbuf, sizeof sbuf, 0)) < 0 ) {
+
+    if ( send(socket, sbuf, sizeof sbuf, 0) < 0 ) {
         errno_abort("send code error");
     }
 }
@@ -284,7 +280,6 @@ void TcpThread::sendSync(int socket){
 
 void TcpThread::clearPeerInfo(struct sockaddr_in sockaddr){
     sharedStructs.networkResourcesMutex.lock();
-
     sharedStructs.networkResources.erase(convertAddressLong(sockaddr));
     sharedStructs.networkResourcesMutex.unlock();
 }

@@ -55,7 +55,7 @@ private:
 
     void sendMyState(sockaddr_in in);
 
-    static void printUdpThreadMessage(std::string);
+    static void printUdpThreadMessage(const std::string&);
 };
 
 #endif //TIN_TORRENTLIKEP2P_UDPTHREAD_H
