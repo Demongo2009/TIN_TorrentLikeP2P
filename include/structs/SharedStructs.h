@@ -13,21 +13,17 @@ struct SharedStructs{
     std::mutex networkResourcesMutex;
     std::map<std::string, std::string> filepaths;
 
-    //UDP
+
     void addNetworkResource(sockaddr_in, const ResourceInfo&);
     void revokeResource(const ResourceInfo&);
     void deleteResourceFromNode(sockaddr_in, const ResourceInfo&);
     void addNetworkNode(sockaddr_in);
-    void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& ); //zarowno TCP jak i UDP
+    void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& );
     void deleteNetworkNode(sockaddr_in);
-    std::string getMyStateString();
-
-    //TCP
+    std::vector<std::string> getLocalStateString();
+    bool addLocalResource(const ResourceInfo &resource, const std::string &filepath);
     unsigned long getFileSize(const std::string&);
 
-
-    //CLI
-    //...
 
 
 };

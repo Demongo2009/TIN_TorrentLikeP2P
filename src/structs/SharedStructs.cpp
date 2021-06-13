@@ -47,11 +47,6 @@ void SharedStructs::deleteNetworkNode(sockaddr_in sockaddr) {
     networkResourcesMutex.unlock();
 }
 
-std::string SharedStructs::getMyStateString() {
-    //TODO nie wiem czy w wysylaniu swojego staniu nie ma buga  anie jestem w stanie tego sprawdzić ;(
-    return std::__cxx11::string();
-}
-
 unsigned long SharedStructs::getFileSize(const std::string& resourceName) {
     localResourcesMutex.lock();
     unsigned long fileSize = localResources.at(resourceName).sizeInBytes;
@@ -79,5 +74,25 @@ bool SharedStructs::addLocalResource(const ResourceInfo &resource,const std::str
 	localResourcesMutex.unlock();
 	filepaths.insert(std::make_pair(resourceName, filepath));
 	return true;
+}
+
+std::vector<std::string> SharedStructs::getLocalStateString() {
+    std::stringstream ss;
+    std::vector<std::string> payloads;
+    localResourcesMutex.lock();
+
+    for(const auto& [resourceName, resource] : localResources){
+        if(ss.str().size() + resourceName.size() + sizeof(long) + sizeof(int) > MAX_SIZE_OF_PAYLOAD){
+            payloads.emplace_back(ss.str());
+            ss.clear();
+        }
+        ss << resource.resourceName  << SEPARATOR
+           << resource.revokeHash  << SEPARATOR
+           << resource.sizeInBytes  << SEPARATOR;
+    }
+
+    localResourcesMutex.unlock();
+    payloads.emplace_back(ss.str());
+    return std::move(payloads);
 }
 

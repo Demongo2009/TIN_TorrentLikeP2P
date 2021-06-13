@@ -207,35 +207,20 @@ void UdpThread::handleNodeLeftNetwork(sockaddr_in sockaddr) {
 }
 
 void UdpThread::sendMyState(sockaddr_in newPeer) {
-    std::stringstream ss;
-    sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
 
-    for(const auto& [resourceName, resource] : sharedStructs.localResources){
-        if(ss.str().size() + resourceName.size() + sizeof(long) + sizeof(int) > MAX_SIZE_OF_PAYLOAD){
-            snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-            memset(sbuf, 0 , sizeof(sbuf));
-            snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
-            if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
-                errno_abort("send");
-            }
-            ss.str("");
+    std::vector<std::string> messagePayloads = sharedStructs.getLocalStateString();
+
+    for(const auto& payloadStr: messagePayloads){
+        memset(sbuf, 0 , sizeof(sbuf));
+        memset(payload, 0 , sizeof(payload));
+        snprintf(payload, sizeof(payload), "%s", payloadStr.c_str());
+        snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
+        if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
+            errno_abort("send");
         }
-        ss << resource.resourceName  << SEPARATOR
-        << resource.revokeHash  << SEPARATOR
-        << resource.sizeInBytes  << SEPARATOR;
     }
-
-    sharedStructs.localResourcesMutex.unlock();
-    memset(sbuf, 0 , sizeof(sbuf));
-    memset(payload, 0 , sizeof(payload));
-    snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-    snprintf(sbuf, sizeof(sbuf), "%d;%s", STATE_OF_NODE, payload);
-    if (sendto(udpSocket, sbuf, strlen(sbuf) + 1, 0, (struct sockaddr *) &newPeer, sizeof newPeer) < 0) {
-        errno_abort("send");
-    }
-
 }
 
 void UdpThread::setBarrier(pthread_barrier_t *ptr) {

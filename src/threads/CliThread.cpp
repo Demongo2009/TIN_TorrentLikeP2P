@@ -95,26 +95,9 @@ void CliThread::handleClientAddResource(const std::string& resourceName, const s
     resourceInfo.sizeInBytes = f.tellg();
     resourceInfo.revokeHash = std::hash<std::string >{}(userPassword);
     resourceInfo.isRevoked = false;
-
-    sharedStructs.localResourcesMutex.lock();
-    if(sharedStructs.localResources.find(resourceName) != sharedStructs.localResources.end()){
-        std::cout << "File of this name already exists!\n";
-        sharedStructs.localResourcesMutex.unlock();
-        return;
+    if(sharedStructs.addLocalResource(resourceInfo, filepath)){
+        udpObj->broadcastNewFile(resourceInfo);
     }
-    for(auto& resources: sharedStructs.networkResources){
-        auto it = resources.second.find(resourceName);
-        if( it != resources.second.end()){
-            std::cout << "File of this name already exists!\n";
-            sharedStructs.localResourcesMutex.unlock();
-            return;
-        }
-    }
-    sharedStructs.localResources.emplace(resourceName, resourceInfo);
-    sharedStructs.localResourcesMutex.unlock();
-    sharedStructs.filepaths.insert(std::make_pair(resourceName, filepath));
-
-    udpObj->broadcastNewFile(resourceInfo);
 }
 
 void CliThread::handleClientListResources() {
