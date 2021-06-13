@@ -174,7 +174,7 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
 
     unsigned long fileSize = sharedStructs.getFileSize(message.resourceName);
 
-    char chunk[CHUNK_SIZE];
+    uint8_t chunk[CHUNK_SIZE];
     char sbuf[MAX_MESSAGE_SIZE] = {};
     int c = CHUNK_SIZE;
     unsigned int nToWrite;
@@ -184,10 +184,10 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
 
         memset(chunk, 0, CHUNK_SIZE);
         if (offset + c <= fileSize) {
-            ifs.read(chunk, CHUNK_SIZE);
+            ifs.read((char *)chunk, CHUNK_SIZE);
             nToWrite = c;
         } else {
-            ifs.read(chunk, fileSize - offset);
+            ifs.read((char *)chunk, fileSize - offset);
             chunk[fileSize - offset] = '\0';
             nToWrite = fileSize - offset;
         }

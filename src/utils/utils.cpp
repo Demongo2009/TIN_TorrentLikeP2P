@@ -39,3 +39,12 @@ std::string getMyAddress(int socket){
     addr = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
     return addr;
 }
+
+unsigned int getCountBytesToWrite(unsigned long long fileSize, unsigned long index, unsigned int chunkSize){
+    unsigned long offset = index * chunkSize;
+    if (offset + chunkSize <= fileSize) {
+        return chunkSize;
+    } else {
+        return fileSize - offset;
+    }
+}
