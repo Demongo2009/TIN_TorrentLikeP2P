@@ -3,6 +3,7 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <cstring>
+#include <iostream>
 #include "../../include/utils/utils.h"
 void errno_abort(const std::string &header){
     perror(header.c_str());
@@ -38,4 +39,13 @@ std::string getMyAddress(int socket){
     ioctl(socket, SIOCGIFADDR, &ifr);
     addr = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
     return addr;
+}
+
+unsigned int getCountBytesToWrite(unsigned long long fileSize, unsigned long index, unsigned int chunkSize){
+    unsigned long long offset = index * chunkSize;
+    if (offset + chunkSize <= fileSize) {
+        return chunkSize;
+    } else {
+        return fileSize - offset;
+    }
 }

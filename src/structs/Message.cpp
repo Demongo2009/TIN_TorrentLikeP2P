@@ -1,4 +1,6 @@
 #include "../../include/structs/Message.h"
+#include "../../include/utils/utils.h"
+
 
 DemandChunkMessage DemandChunkMessage::deserializeChunkMessage(const char *message) {
     std::string name;
@@ -45,28 +47,30 @@ DemandChunkMessage DemandChunkMessage::deserializeChunkMessage(const char *messa
     return DemandChunkMessage(name, indices);
 }
 
-std::optional<ChunkTransfer> ChunkTransfer::deserializeChunkTransfer(const char *message, unsigned long long fileSize) {
-    char payload[(CHUNK_SIZE) + 1];
+std::optional<ChunkTransfer> ChunkTransfer::deserializeChunkTransfer(const uint8_t *message, unsigned long long fileSize) {
+    uint8_t payload[(CHUNK_SIZE) + 1];
     memset(payload, 0, sizeof payload);
     unsigned short charIndex=0;
-    char currCharacter=message[charIndex];
+    char currCharacter=(char)message[charIndex];
 
 
     std::string currentIndex, headerStr;
     while (isdigit(currCharacter)){
         headerStr+=currCharacter;
-        currCharacter=message[++charIndex];
+        currCharacter=(char)message[++charIndex];
     }
     if( std::stoi(headerStr) != CHUNK_TRANSFER ) {
         return std::nullopt;
     }
-    currCharacter=message[++charIndex];
+    currCharacter=(char)message[++charIndex];
     while (isdigit(currCharacter)){
         currentIndex+=currCharacter;
-        currCharacter=message[++charIndex];
+        currCharacter=(char)message[++charIndex];
     }
     ++charIndex;
-    strncpy( payload, message + charIndex, strlen(message) - charIndex );
-    payload[strlen(message) - charIndex] = '\0';
-    return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex), payload);
+    unsigned  int countBytesToWrite = getCountBytesToWrite(fileSize, std::stoul(currentIndex), CHUNK_SIZE );
+//    strncpy( payload, message + charIndex, strlen(message) - charIndex );
+//    payload[strlen(message) - charIndex] = '\0';
+    memcpy(payload, message + charIndex, countBytesToWrite );
+    return ChunkTransfer((TcpMessageCode)std::stoi(headerStr), std::stoul(currentIndex), payload, countBytesToWrite);
 }

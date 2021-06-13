@@ -12,6 +12,7 @@ public:
 
     SynchronizedFile(const SynchronizedFile& other){
         this->filename = other.getFilename();
+        this->size = other.getSize();
     }
 
     std::string getFilename()const {
@@ -23,7 +24,7 @@ public:
     }
 
     void reserveFile(unsigned long long fileSize);
-    void write(const char * data, unsigned int index);
+    void write(const uint8_t * data, unsigned int index, unsigned int countBytesToWrite);
 
 private:
     std::string filename;

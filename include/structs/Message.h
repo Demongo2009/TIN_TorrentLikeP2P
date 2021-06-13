@@ -48,12 +48,13 @@ enum UdpMessageCode {
 struct ChunkTransfer{
     TcpMessageCode header;
     unsigned long index;
-    char payload[CHUNK_SIZE + 1];
-    ChunkTransfer( TcpMessageCode header, unsigned long index, const char* payload): header(header), index(index){
-        strncpy(this->payload, payload, strlen(payload) );
-        this->payload[strlen(payload)] = '\0';
+    uint8_t payload[CHUNK_SIZE + 1];
+    ChunkTransfer( TcpMessageCode header, unsigned long index, uint8_t* payload, unsigned int chunkSize): header(header), index(index){
+//        strncpy(this->payload, payload, strlen(payload) );
+//        this->payload[strlen(payload)] = '\0';
+        memcpy(this->payload, payload, chunkSize );
 
     }
-    static std::optional<ChunkTransfer> deserializeChunkTransfer(const char *message, unsigned long long fileSize);
+    static std::optional<ChunkTransfer> deserializeChunkTransfer(const uint8_t *message, unsigned long long fileSize);
 };
 #endif //TIN_TORRENTLIKEP2P_MESSAGE_H

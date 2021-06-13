@@ -216,7 +216,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
 
 
 void CliThread::receiveChunks(int sock, int chunksCount, const std::string &filepath) {
-    char rbuf[MAX_MESSAGE_SIZE];
+    uint8_t rbuf[MAX_MESSAGE_SIZE];
     unsigned long long fileSize;
     for(int i = 0; i < chunksCount; ++i) {
         memset(rbuf, 0, MAX_MESSAGE_SIZE);
@@ -231,7 +231,8 @@ void CliThread::receiveChunks(int sock, int chunksCount, const std::string &file
         if (messageOpt.has_value()){
             ChunkTransfer message = messageOpt.value();
             tcpObj->sendHeader(sock, CHUNK_TRANSFER_OK);
-            ongoingDownloadingFiles.at(filepath).write(message.payload, message.index);
+            unsigned int countBytesToWrite = getCountBytesToWrite(fileSize, message.index, CHUNK_SIZE);
+            ongoingDownloadingFiles.at(filepath).write(message.payload, message.index, countBytesToWrite);
         }else {
             throw std::runtime_error("receive chunks bad header");
         }
