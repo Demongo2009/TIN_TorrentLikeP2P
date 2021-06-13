@@ -197,8 +197,10 @@ bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
     char header[HEADER_SIZE];
     memset(header, 0, HEADER_SIZE);
     if (recv(socket, header, sizeof(header), 0) <= 0) {
-        perror("receive error");
-        return false;
+        close(socket);
+        this->connectedClients.erase(socket);
+
+        throw std::runtime_error("receive header failed");
     }
     if(std::stoi(header) == code){
         return true;
