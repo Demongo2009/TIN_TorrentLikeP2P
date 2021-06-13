@@ -243,6 +243,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
             }
             ss.str("");
             if(first){
+				tcpObj->receiveSync(sock, sockaddr);
                 tcpObj->sendSync(sock);
                 first = false;
             }
@@ -261,6 +262,7 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
         errno_abort("send");
     }
     if(first){
+		tcpObj->receiveSync(sock, sockaddr);
         tcpObj->sendSync(sock);
     }
     receiveChunks(sock, chunksCount, filepath);

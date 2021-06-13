@@ -1,5 +1,5 @@
 #include "../../include/structs/SynchronizedFile.h"
-#include "../../include/constants.h"
+#include "../../include/structs/Message.h"
 
 void SynchronizedFile::write(const char * data, unsigned int index){
     std::lock_guard<std::mutex> lock(writerMutex);
