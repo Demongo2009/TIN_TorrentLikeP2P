@@ -3,6 +3,7 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <cstring>
+#include <iostream>
 #include "../../include/utils/utils.h"
 void errno_abort(const std::string &header){
     perror(header.c_str());
@@ -41,7 +42,7 @@ std::string getMyAddress(int socket){
 }
 
 unsigned int getCountBytesToWrite(unsigned long long fileSize, unsigned long index, unsigned int chunkSize){
-    unsigned long offset = index * chunkSize;
+    unsigned long long offset = index * chunkSize;
     if (offset + chunkSize <= fileSize) {
         return chunkSize;
     } else {

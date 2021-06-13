@@ -12,6 +12,7 @@ public:
 
     SynchronizedFile(const SynchronizedFile& other){
         this->filename = other.getFilename();
+        this->size = other.getSize();
     }
 
     std::string getFilename()const {
