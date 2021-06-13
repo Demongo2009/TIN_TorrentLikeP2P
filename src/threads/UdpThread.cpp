@@ -10,7 +10,7 @@
 #include <fstream>
 
 #include <vector>
-#include "../../include/utils.h"
+#include "../../include/utils/utils.h"
 #include "../../include/threads/UdpThread.h"
 
 const char* LOCALHOST_ADDRESS = "127.0.0.1";

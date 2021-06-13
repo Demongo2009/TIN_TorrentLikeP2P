@@ -1,5 +1,5 @@
 #include "../../include/structs/SharedStructs.h"
-#include "../../include/utils.h"
+#include "../../include/utils/utils.h"
 
 void SharedStructs::addNetworkResource(sockaddr_in sockaddr, const ResourceInfo& resource) {
     networkResourcesMutex.lock();
@@ -57,5 +57,27 @@ unsigned long SharedStructs::getFileSize(const std::string& resourceName) {
     unsigned long fileSize = localResources.at(resourceName).sizeInBytes;
     localResourcesMutex.unlock();
     return fileSize;
+}
+
+bool SharedStructs::addLocalResource(const ResourceInfo &resource,const std::string& filepath) {
+	std::string resourceName = resource.resourceName;
+	localResourcesMutex.lock();
+	if(localResources.find(resourceName) != localResources.end()){
+		std::cout << "File of this name already exists!\n";
+		localResourcesMutex.unlock();
+		return false;
+	}
+	for(auto& resources: networkResources){
+		auto it = resources.second.find(resourceName);
+		if( it != resources.second.end()){
+			std::cout << "File of this name already exists!\n";
+			localResourcesMutex.unlock();
+			return false;
+		}
+	}
+	localResources.emplace(resourceName, resource);
+	localResourcesMutex.unlock();
+	filepaths.insert(std::make_pair(resourceName, filepath));
+	return true;
 }
 

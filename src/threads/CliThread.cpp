@@ -5,9 +5,9 @@
 #include <iostream>
 #include <cmath>
 #include <cassert>
-#include "../../include/utils.h"
+#include "../../include/utils/utils.h"
 #include "../../include/threads/CliThread.h"
-#include "../../include/threads/CliParser.h"
+#include "../../include/utils/CliParser.h"
 
 void CliThread::runCliThread() {
     const std::string menu = "Available options:\n"

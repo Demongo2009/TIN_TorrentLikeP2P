@@ -11,7 +11,7 @@
 #include <vector>
 #include <cstdio>
 #include "../../include/threads/TcpThread.h"
-#include "../../include/utils.h"
+#include "../../include/utils/utils.h"
 
 void TcpThread::initTcp(){
     struct sockaddr_in serverAddr{};

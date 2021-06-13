@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../../include/threads/CliParser.h"
+#include "../../include/utils/CliParser.h"
 
 
 ClientCommand CliParser::parseCommand(std::vector<std::string> commandWords, std::string &filepath, std::string &resourceName){
