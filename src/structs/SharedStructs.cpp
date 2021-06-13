@@ -212,5 +212,16 @@ bool SharedStructs::validateChunks(const std::string &resourceName, const std::v
     return true;
 }
 
+bool SharedStructs::deleteLocalResource(const std::string &resourceName) {
+	localResourcesMutex.lock();
+	if(localResources.find(resourceName) == localResources.end()){
+		localResourcesMutex.unlock();
+		return false;
+	}
+	localResources.erase(resourceName);
+	localResourcesMutex.unlock();
+	return true;
+}
+
 
 
