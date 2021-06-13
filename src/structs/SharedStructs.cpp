@@ -176,7 +176,7 @@ std::vector<struct sockaddr_in> SharedStructs::getNodesContainingResource(const 
     return peers;
 }
 
-bool SharedStructs::deleteLocalResource(const std::string &resourceName, std::size_t hash) {
+bool SharedStructs::deleteLocalResourceAfterRevoke(const std::string &resourceName, std::size_t hash) {
     localResourcesMutex.lock();
     if(localResources.find(resourceName) == localResources.end()){
         localResourcesMutex.unlock();

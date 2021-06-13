@@ -48,7 +48,7 @@ private:
 
 
     static std::vector<std::vector<int>> prepareChunkIndices(int peersCount, unsigned int fileSize);
-    void downloadChunksFromPeer(sockaddr_in, const std::vector<int> &, const std::string& , const std::string &);
+    bool downloadChunksFromPeer(sockaddr_in, const std::vector<int> &, const std::string& , const std::string &);
     void receiveChunks(int sock, int chunksCount, const std::string &filepath);
     void downloadResourceJob(const std::string &resource, const std::string &filepath);
 };

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <cmath>
+#include <future>
 #include <cassert>
 #include "../../include/utils/utils.h"
 #include "../../include/threads/CliThread.h"
@@ -147,24 +148,30 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     std::vector<std::vector<int> > chunkIndices =
             prepareChunkIndices(peersPossessingResource.size(), fileSize);
 
-    std::vector<std::thread> threads;
+    std::vector<std::future<bool> > threads;
     threads.reserve(chunkIndices.size());
     SynchronizedFile file = SynchronizedFile(filepath);
     file.reserveFile(fileSize);
     ongoingDownloadingFiles.insert(std::make_pair(filepath, file));
     for(int i = 0; i < chunkIndices.size(); ++i){
-        threads.emplace_back(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath);
+        threads.emplace_back(std::async(&CliThread::downloadChunksFromPeer, this, peersPossessingResource[i], chunkIndices[i], resourceName, filepath));
     }
+    bool isSuccessful = true;
     for(auto & thread: threads){
-        thread.join();
+        if(!thread.get()){
+            isSuccessful = false;
+        }
     }
     ongoingDownloadingFiles.erase(filepath);
-    ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize, revokeHash);
-    sharedStructs.addLocalResource(downloadedResource, filepath);
-    udpObj->broadcastNewFile(downloadedResource);
+    if(isSuccessful) {
+        ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize, revokeHash);
+        sharedStructs.addLocalResource(downloadedResource, filepath);
+        udpObj->broadcastNewFile(downloadedResource);
+    }
+
 }
 
-void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string& resourceName, const std::string &filepath){
+bool CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::vector<int>& chunksIndices, const std::string& resourceName, const std::string &filepath){
 
     std::stringstream ss;
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
@@ -172,46 +179,53 @@ void CliThread::downloadChunksFromPeer( struct sockaddr_in sockaddr, const std::
     bool first = true;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if(connect(sock, (struct sockaddr *) &sockaddr, sizeof sockaddr) < 0){
-        throw std::runtime_error("connect fail");
+        return false;
     }
-    openSockets.insert(sock);
-    int chunksCount = 0;
-    for(const auto& index : chunksIndices){
-        if(ss.str().size() + 2 * std::to_string(index).size() + resourceName.size() + 1>= MAX_SIZE_OF_PAYLOAD){
-            memset(payload, 0 , sizeof(payload));
-            snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-            memset(sbuf, 0 , sizeof(sbuf));
-            snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
-            if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
-                errno_abort("send");
-            }
-            ss.str("");
-            if(first){
-				tcpObj->receiveSync(sock, sockaddr);
-                tcpObj->sendSync(sock);
-                first = false;
-            }
-            receiveChunks(sock, chunksCount, filepath);
+    try {
+        openSockets.insert(sock);
+        int chunksCount = 0;
+        for (const auto &index : chunksIndices) {
+            if (ss.str().size() + 2 * std::to_string(index).size() + resourceName.size() + 1 >= MAX_SIZE_OF_PAYLOAD) {
+                memset(payload, 0, sizeof(payload));
+                snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
+                memset(sbuf, 0, sizeof(sbuf));
+                snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
+                if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
+                    errno_abort("send");
+                }
+                ss.str("");
+                if (first) {
+                    tcpObj->receiveSync(sock, sockaddr);
+                    tcpObj->sendSync(sock);
+                    first = false;
+                }
+                receiveChunks(sock, chunksCount, filepath);
 
-            chunksCount = 0;
+                chunksCount = 0;
+            }
+            ++chunksCount;
+            ss << index << ";";
         }
-        ++chunksCount;
-        ss<< index << ";" ;
+        memset(sbuf, 0, sizeof(sbuf));
+        memset(payload, 0, sizeof(payload));
+        snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
+        snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
+        if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
+            errno_abort("send");
+        }
+        if (first) {
+            tcpObj->receiveSync(sock, sockaddr);
+            tcpObj->sendSync(sock);
+        }
+        receiveChunks(sock, chunksCount, filepath);
+        close(sock);
+        openSockets.erase(sock);
+        return true;
+    }catch (std::exception& e ){
+        close(sock);
+        openSockets.erase(sock);
+        return false;
     }
-    memset(sbuf, 0 , sizeof(sbuf));
-    memset(payload, 0 , sizeof(payload));
-    snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-    snprintf(sbuf, sizeof(sbuf), "%d;%s;%s", DEMAND_CHUNK, resourceName.c_str(), payload);
-    if (send(sock, sbuf, strlen(sbuf) + 1, 0) < 0) {
-        errno_abort("send");
-    }
-    if(first){
-		tcpObj->receiveSync(sock, sockaddr);
-        tcpObj->sendSync(sock);
-    }
-    receiveChunks(sock, chunksCount, filepath);
-    close(sock);
-    openSockets.erase(sock);
 }
 
 
@@ -259,7 +273,7 @@ void CliThread::handleRevokeResource(const std::string& resourceName) {
     std::string userPassword = getResourcePassword();
     std::size_t hash = std::hash<std::string>{}(userPassword);
 
-    if(sharedStructs.deleteLocalResource(resourceName, hash)){
+    if(sharedStructs.deleteLocalResourceAfterRevoke(resourceName, hash)){
         sharedStructs.deleteNetworkResource(resourceName);
         udpObj->broadcastRevokeFile(resourceName);
     }

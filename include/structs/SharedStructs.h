@@ -24,7 +24,8 @@ struct SharedStructs{
     void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& );
 
     bool addLocalResource(const ResourceInfo &resource, const std::string &filepath);
-    bool deleteLocalResource(const std::string&, std::size_t);
+    bool deleteLocalResourceAfterRevoke(const std::string&, std::size_t);
+    bool deleteLocalResource(const std::string&);
     std::vector<std::string> getLocalStateString();
     unsigned long getFileSize(const std::string&);
     std::size_t getRevokeHash(const std::string&);
