@@ -184,7 +184,8 @@ void UdpThread::handleNewResourceAvailable(char *message, sockaddr_in sockaddr) 
 
 void UdpThread::handleOwnerRevokedResource(char *message) {
     ResourceInfo resource = ResourceInfo::deserializeResource(message);
-    sharedStructs.revokeResource(resource);
+    sharedStructs.deleteNetworkResource(resource.resourceName);
+    //TODO: a co z lokalnym plikiem, czy dalej powinien wyswietlac sie na liscie?
 }
 
 void UdpThread::handleNodeDeletedResource(char *message, sockaddr_in sockaddr) {

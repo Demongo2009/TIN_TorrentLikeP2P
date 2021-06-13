@@ -74,12 +74,6 @@ int TcpThread::acceptClient() {
 void TcpThread::receive(int socket){
     char rbuf[MAX_MESSAGE_SIZE];
     memset(rbuf, 0, MAX_MESSAGE_SIZE);
-	int error_code;
-	int error_code_size = sizeof(error_code);
-	if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
-		std::cout << "Connection lost\n";
-		return;
-	}
     if (recv(socket, rbuf, sizeof(rbuf) - 1, 0) <= 0) {
         if(connectedClients.find(socket)!= connectedClients.end()) {
             connectedClients.erase(socket);
@@ -137,22 +131,9 @@ void TcpThread::handleTcpMessage(char *header, char *payload, int socket) {
 }
 
 bool TcpThread::validateChunkDemand(const DemandChunkMessage& message){
-    sharedStructs.localResourcesMutex.lock();
-    if(sharedStructs.localResources.find(message.resourceName) == sharedStructs.localResources.end() ) {
-        sharedStructs.localResourcesMutex.unlock();
-        return false;
-    }
-    unsigned long fileSize = sharedStructs.localResources.at(message.resourceName).sizeInBytes;
-    int c = CHUNK_SIZE;
-    for(const auto & index : message.chunkIndices) {
-        unsigned long offset = index * c;
-        if (offset > fileSize){
-            sharedStructs.localResourcesMutex.unlock();
-            return false;
-        }
-    }
-    sharedStructs.localResourcesMutex.unlock();
-    return true;
+    std::string resourceName = message.resourceName;
+    std::vector<unsigned long> chunkIndices = message.chunkIndices;
+    return sharedStructs.validateChunks(resourceName, chunkIndices);
 }
 
 void TcpThread::demandChunkJob(char *payload, int socket){
@@ -194,12 +175,6 @@ void TcpThread::sendChunks(const DemandChunkMessage& message, int socket){
         memset(sbuf, 0, sizeof(sbuf));
         snprintf(sbuf, sizeof(sbuf), "%d;%lu;", CHUNK_TRANSFER, index);
         memcpy(sbuf + std::to_string(CHUNK_TRANSFER).size() + std::to_string(index).size() + 2, chunk, nToWrite);
-		int error_code;
-		int error_code_size = sizeof(error_code);
-		if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
-			std::cout << "Connection lost\n";
-			return;
-		}
         if (send(socket, sbuf, MAX_MESSAGE_SIZE, 0) < 0) {
             errno_abort("send chunk");
         }
@@ -233,45 +208,20 @@ bool TcpThread::receiveHeader(int socket, TcpMessageCode code){
 }
 
 void TcpThread::sendSync(int socket){
-    std::stringstream ss;
-    sharedStructs.localResourcesMutex.lock();
     char payload[MAX_SIZE_OF_PAYLOAD] = {};
     char sbuf[HEADER_SIZE + MAX_SIZE_OF_PAYLOAD] = {};
-    for(const auto& [resourceName, resource] : sharedStructs.localResources){
-        if(ss.str().size() + resourceName.size() > MAX_SIZE_OF_PAYLOAD){
-            snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-            memset(sbuf, 0 , sizeof(sbuf));
-            snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
-			int error_code;
-			int error_code_size = sizeof(error_code);
-			if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
-				std::cout << "Connection lost\n";
-				return;
-			}
-            if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
-                errno_abort("sync");
-            }
-            ss.str("");
-            receiveHeader(socket, SYNC_OK);
-        }
-        ss << resource.resourceName  << ";"  << resource.revokeHash  << ";"  << resource.sizeInBytes  << ";";
-    }
+    std::vector<std::string> messagePayloads = sharedStructs.getLocalStateString();
 
-    sharedStructs.localResourcesMutex.unlock();
-    memset(sbuf, 0 , sizeof(sbuf));
-    memset(payload, 0 , sizeof(payload));
-    snprintf(payload, sizeof(payload), "%s", ss.str().c_str());
-    snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
-	int error_code;
-	int error_code_size = sizeof(error_code);
-	if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
-		std::cout << "Connection lost\n";
-		return;
-	}
-    if (send(socket, sbuf, strlen(sbuf) + 1, 0) <= 0) {
-        errno_abort("sync");
+    for(const auto& payloadStr: messagePayloads) {
+        memset(sbuf, 0 , sizeof(sbuf));
+        memset(payload, 0 , sizeof(payload));
+        snprintf(payload, sizeof(payload), "%s", payloadStr.c_str());
+        snprintf(sbuf, sizeof(sbuf), "%d;%s", MY_STATE_BEFORE_FILE_TRANSFER, payload);
+        if (send(socket, sbuf, strlen(sbuf) + 1, 0) < 0) {
+                errno_abort("sync");
+        }
+        receiveHeader(socket, SYNC_OK);
     }
-    receiveHeader(socket, SYNC_OK);
     sendHeader(socket, SYNC_END);
     printTcpThreadMessage(std::string("sent: ") + sbuf);
 }
@@ -305,19 +255,8 @@ bool TcpThread::receiveSync(int socket, std::optional<struct sockaddr_in> sockad
             snprintf(payload, sizeof(payload), "%s", rbuf + HEADER_SIZE);
             std::vector<ResourceInfo> resources = ResourceInfo::deserializeVectorOfResources(payload);
 
-            //TODO: sprawdzic czy to jest dobrze
             sharedStructs.registerNewNodeWithItsResources(sockaddr, resources);
-//            sharedStructs.networkResourcesMutex.lock();
-//            for(const auto & r : resources){
-//                sharedStructs.networkResources[convertAddressLong(sockaddr)][r.resourceName] = r;
-//            }
-//            sharedStructs.networkResourcesMutex.unlock();
-			int error_code;
-			int error_code_size = sizeof(error_code);
-			if(getsockopt(socket, SOL_SOCKET, SO_ERROR, &error_code, reinterpret_cast<socklen_t *>(&error_code_size))!=0){
-				std::cout << "Connection lost\n";
-				return false;
-			}
+
             sendHeader(socket, SYNC_OK);
         } else if(std::stoi(header) == SYNC_END){
             return true;

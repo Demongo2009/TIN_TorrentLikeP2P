@@ -102,45 +102,18 @@ void CliThread::handleClientAddResource(const std::string& resourceName, const s
 
 void CliThread::handleClientListResources() {
     std::cout<<"LOCAL RESOURCES: "<<std::endl;
-    sharedStructs.localResourcesMutex.lock();
-    for(const auto& it : sharedStructs.localResources){
-        std::cout<< "NAME: "<<it.first<< " SIZE: "<<it.second.sizeInBytes<<std::endl;
-    }
-    sharedStructs.localResourcesMutex.unlock();
+    sharedStructs.printLocalResources();
 
     std::cout<<std::endl<<"NETWORK RESOURCES: "<<std::endl;
-    sharedStructs.networkResourcesMutex.lock();
-    struct in_addr addr{};
-    for(const auto& [peerAddress, resources] : sharedStructs.networkResources){
-        addr.s_addr = peerAddress;
-        std::cout<< "RESOURCES OF PEER: "<<inet_ntoa(addr) <<std::endl;
-        for(const auto& it: resources){
-            std::cout<< "NAME: "<<it.first<< " SIZE: "<<it.second.sizeInBytes<<std::endl;
-        }
-    }
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.printNetworkResources();
+
     std::cout<<std::endl;
 }
 
 
 void CliThread::handleClientFindResource(const std::string& resourceName) {
-    sharedStructs.localResourcesMutex.lock();
-    auto it = sharedStructs.localResources.find(resourceName);
-    if( it != sharedStructs.localResources.end()){
-        std::cout<<"LOCAL RESOURCE: "<< resourceName<< " PATH: " << sharedStructs.filepaths.at(resourceName) << std::endl;
-    }
-    sharedStructs.localResourcesMutex.unlock();
-    sharedStructs.networkResourcesMutex.lock();
-    struct in_addr addr{};
-    for(auto& [peerAddress, resources]: sharedStructs.networkResources){
-        it = resources.find(resourceName);
-        if( it != resources.end()){
-            addr.s_addr = peerAddress;
-            std::cout<< "NETWORK RESOURCE OF PEER: "<<inet_ntoa(addr) <<std::endl;
-            std::cout<<"NAME: "<< resourceName<< " SIZE: " << it->second.sizeInBytes << std::endl;
-        }
-    }
-    sharedStructs.networkResourcesMutex.unlock();
+    sharedStructs.findLocalResource(resourceName);
+    sharedStructs.findNetworkResource(resourceName);
 }
 
 
@@ -150,38 +123,29 @@ void CliThread::handleDownloadResource(const std::string& resourceName, const st
 }
 
 void CliThread::downloadResourceJob(const std::string& resourceName, const std::string& filepath){
-
-    sharedStructs.localResourcesMutex.lock();
-    auto it = sharedStructs.localResources.find(resourceName);
-    if( it != sharedStructs.localResources.end()){
-        std::cout<<"YOU ARE ALREADY IN POSSESSION OF THE RESOURCE "<< resourceName
-            << " PATH: " << sharedStructs.filepaths.at(resourceName) << std::endl;
-        sharedStructs.localResourcesMutex.unlock();
+    if(!sharedStructs.checkIfFileIsInPossession(resourceName)){
         return;
     }
-    sharedStructs.localResourcesMutex.unlock();
-    sharedStructs.networkResourcesMutex.lock();
-    struct sockaddr_in addr{};
-    std::vector<struct sockaddr_in> peersPossessingResource;
-    unsigned long long fileSize;
-    std::size_t revokeHash;
-    for(auto& [peerAddress, resources] : sharedStructs.networkResources){
-        it = resources.find(resourceName);
-        if( it != resources.end()){
-            addr.sin_addr.s_addr = peerAddress;
-            addr.sin_port = ntohs(5555);
-            addr.sin_family = AF_INET;
-            peersPossessingResource.emplace_back(addr);
-            fileSize = it->second.sizeInBytes;
-            revokeHash = it->second.revokeHash;
-        }
-    }
-    sharedStructs.networkResourcesMutex.unlock();
+    std::vector<struct sockaddr_in> peersPossessingResource =
+            sharedStructs.getNodesContainingResource(resourceName);
+
     if(peersPossessingResource.empty()){
         std::cout<<"NOBODY IS IN POSSESSION OF THE RESOURCE: "<< resourceName<< std::endl;
         return;
     }
-    std::vector<std::vector<int> > chunkIndices = prepareChunkIndices(peersPossessingResource.size(), fileSize);
+
+    //ugly, but correct, since we already check that there is at least one peer
+    unsigned long long fileSize = sharedStructs
+            .networkResources
+            .at(peersPossessingResource[0].sin_addr.s_addr)
+            .at(resourceName).sizeInBytes;
+    std::size_t revokeHash = sharedStructs
+            .networkResources
+            .at(peersPossessingResource[0].sin_addr.s_addr)
+            .at(resourceName).revokeHash;
+
+    std::vector<std::vector<int> > chunkIndices =
+            prepareChunkIndices(peersPossessingResource.size(), fileSize);
 
     std::vector<std::thread> threads;
     threads.reserve(chunkIndices.size());
@@ -196,10 +160,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     }
     ongoingDownloadingFiles.erase(filepath);
     ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize, revokeHash);
-    sharedStructs.localResourcesMutex.lock();
-    sharedStructs.localResources[resourceName] = downloadedResource;
-    sharedStructs.localResourcesMutex.unlock();
-    sharedStructs.filepaths[resourceName] = filepath;
+    sharedStructs.addLocalResource(downloadedResource, filepath);
     udpObj->broadcastNewFile(downloadedResource);
 }
 
@@ -295,31 +256,12 @@ std::vector<std::vector<int> > CliThread::prepareChunkIndices(int peersCount, un
 
 void CliThread::handleRevokeResource(const std::string& resourceName) {
     std::string userPassword = getResourcePassword();
-    sharedStructs.localResourcesMutex.lock();
     std::size_t hash = std::hash<std::string>{}(userPassword);
-    if(sharedStructs.localResources.find(resourceName) == sharedStructs.localResources.end()){
-        sharedStructs.localResourcesMutex.unlock();
-        std::cout<<"No such resource"<<std::endl;
-        return;
-    }
-    if(sharedStructs.localResources.at(resourceName).revokeHash != hash ){
-        sharedStructs.localResourcesMutex.unlock();
-        std::cout<<"Invalid revoke password!"<<std::endl;
-        return;
-    }
-    sharedStructs.localResources.erase(resourceName);
-    sharedStructs.localResourcesMutex.unlock();
-    sharedStructs.networkResourcesMutex.lock();
-    for(auto& resources: sharedStructs.networkResources){
-        auto it = resources.second.find(resourceName);
-        if( it != resources.second.end()){
-            resources.second.erase(resourceName);
-        }
-    }
-    sharedStructs.networkResourcesMutex.unlock();
 
-    udpObj->broadcastRevokeFile(resourceName);
-
+    if(sharedStructs.deleteLocalResource(resourceName, hash)){
+        sharedStructs.deleteNetworkResource(resourceName);
+        udpObj->broadcastRevokeFile(resourceName);
+    }
 }
 
 void CliThread::setBarrier(pthread_barrier_t *ptr) {

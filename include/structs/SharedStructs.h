@@ -15,14 +15,26 @@ struct SharedStructs{
 
 
     void addNetworkResource(sockaddr_in, const ResourceInfo&);
-    void revokeResource(const ResourceInfo&);
-    void deleteResourceFromNode(sockaddr_in, const ResourceInfo&);
+    void deleteNetworkResource(const std::string&);
+
     void addNetworkNode(sockaddr_in);
-    void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& );
     void deleteNetworkNode(sockaddr_in);
-    std::vector<std::string> getLocalStateString();
+
+    void deleteResourceFromNode(sockaddr_in, const ResourceInfo&);
+    void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& );
+
     bool addLocalResource(const ResourceInfo &resource, const std::string &filepath);
+    bool deleteLocalResource(const std::string&, std::size_t);
+    std::vector<std::string> getLocalStateString();
     unsigned long getFileSize(const std::string&);
+    std::size_t getRevokeHash(const std::string&);
+    void printLocalResources();
+    void printNetworkResources();
+    void findLocalResource(const std::string &);
+    void findNetworkResource(const std::string &);
+    bool checkIfFileIsInPossession(const std::string& );
+    std::vector<struct sockaddr_in> getNodesContainingResource(const std::string& );
+    bool validateChunks(const std::string&, const std::vector<unsigned long>&);
 
 
 
