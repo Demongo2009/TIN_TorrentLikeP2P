@@ -96,7 +96,7 @@ void CliThread::handleClientAddResource(const std::string& resourceName, const s
     resourceInfo.sizeInBytes = f.tellg();
     resourceInfo.revokeHash = std::hash<std::string >{}(userPassword);
     resourceInfo.isRevoked = false;
-    if(sharedStructs.addLocalResource(resourceInfo, filepath)){
+    if(sharedStructs.addLocalResource(resourceInfo, filepath, true)){
         udpObj->broadcastNewFile(resourceInfo);
     }
 }
@@ -165,7 +165,7 @@ void CliThread::downloadResourceJob(const std::string& resourceName, const std::
     ongoingDownloadingFiles.erase(filepath);
     if(isSuccessful) {
         ResourceInfo downloadedResource = ResourceInfo(resourceName, fileSize, revokeHash);
-        sharedStructs.addLocalResource(downloadedResource, filepath);
+        sharedStructs.addLocalResource(downloadedResource, filepath, false);
         udpObj->broadcastNewFile(downloadedResource);
     }
 

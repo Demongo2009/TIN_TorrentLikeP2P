@@ -62,20 +62,22 @@ std::size_t SharedStructs::getRevokeHash(const std::string &resourceName) {
     return revokeHash;
 }
 
-bool SharedStructs::addLocalResource(const ResourceInfo &resource,const std::string& filepath) {
+bool SharedStructs::addLocalResource(const ResourceInfo &resource,const std::string& filepath, bool isLocal) {
 	std::string resourceName = resource.resourceName;
 	localResourcesMutex.lock();
-	if(localResources.find(resourceName) != localResources.end()){
-		std::cout << "File of this name already exists!\n";
-		localResourcesMutex.unlock();
-		return false;
-	}
-	for(auto& resources: networkResources){
-		auto it = resources.second.find(resourceName);
-		if( it != resources.second.end()){
+	if(isLocal){
+		if (localResources.find(resourceName) != localResources.end()) {
 			std::cout << "File of this name already exists!\n";
 			localResourcesMutex.unlock();
 			return false;
+		}
+		for (auto &resources: networkResources) {
+			auto it = resources.second.find(resourceName);
+			if (it != resources.second.end()) {
+				std::cout << "File of this name already exists!\n";
+				localResourcesMutex.unlock();
+				return false;
+			}
 		}
 	}
 	localResources.emplace(resourceName, resource);

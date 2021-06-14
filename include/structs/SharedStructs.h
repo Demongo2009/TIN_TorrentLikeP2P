@@ -23,7 +23,7 @@ struct SharedStructs{
     void deleteResourceFromNode(sockaddr_in, const ResourceInfo&);
     void registerNewNodeWithItsResources(sockaddr_in, const std::vector<ResourceInfo>& );
 
-    bool addLocalResource(const ResourceInfo &resource, const std::string &filepath);
+    bool addLocalResource(const ResourceInfo &resource, const std::string &filepath, bool);
     bool deleteLocalResourceAfterRevoke(const std::string&, std::size_t);
     bool deleteLocalResource(const std::string&);
     std::vector<std::string> getLocalStateString();
